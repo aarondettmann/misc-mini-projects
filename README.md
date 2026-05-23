@@ -8,13 +8,19 @@ A collection of small, miscellaneous code snippets and experiments.
 
 See [barnsely_fern](barnsley_fern).
 
-![Barnsley Fern](barnsley_fern/barnsley_fern.png)
+![Barnsley fern](barnsley_fern/barnsley_fern.png)
+
+### Perlin Noise
+
+See [perlin_noise](perlin_noise).
+
+![Perlin noise generation](perlin_noise/perlin_noise_steps.png)
 
 ### Ionizing Radiation Art
 
 See [ionizing_radiation_art](ionizing_radiation_art).
 
-![Ionizing Raditaion Art](ionizing_radiation_art/cover_blue_animation.svg)
+![Ionizing raditaion art](ionizing_radiation_art/cover_blue_animation.svg)
 
 ## Licence
 
