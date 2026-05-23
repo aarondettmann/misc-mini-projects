@@ -1,13 +1,14 @@
 #!/usr/bin/python3
 
 # Version 1: 2024-04-26
+# Updated:   2026-05-23
 
 from random import random, choice
 import itertools
 import math
-import numpy as np
 
 import drawsvg as draw
+import numpy as np
 
 
 def angle_pairs():
@@ -110,17 +111,6 @@ class CoverImage:
             self.COLOR_NETWORKS_HIGHLIGHT = "white"
             self.bg_grad = self.radial_gradient(self.R3)
 
-        elif self.color_theme == "vivi":
-            self.COLOR_CANISTER = "#0086ad"
-            self.COLOR_RADIATION = self.radial_gradient(self.R3)
-            self.COLOR_NETWORKS = "#0086ad"
-            self.COLOR_NETWORKS_HIGHLIGHT = "#0086ad"
-            # # https://colorhunt.co/palette/00676940a5789dde8be6ff94
-            # self.COLOR_NETWORKS = "#40A578"
-            # self.COLOR_NETWORKS_HIGHLIGHT = "#006769"
-            self.bg_grad = "white"
-            # self.bg_grad = "#eeeeee"
-
         elif self.color_theme == "bw":
             self.COLOR_CANISTER = "black"
             self.COLOR_RADIATION = "black"
@@ -142,17 +132,6 @@ class CoverImage:
         if self.color_theme == "blue":
             grad.add_stop(0, '#b3cde0', opacity=1)
             grad.add_stop(1, '#011f4b',  opacity=1)
-            return grad
-
-        if self.color_theme == "vivi":
-            # https://www.color-hex.com/color-palette/1294
-            # https://www.color-hex.com/color-palette/74932
-            # grad.add_stop(0.00, '#6497b1', opacity=1)
-            grad.add_stop(0.00, '#0086ad', opacity=1)
-            grad.add_stop(0.25, '#0086ad', opacity=1)
-            # grad.add_stop(0.50, '#005b96', opacity=1)
-            # grad.add_stop(0.75, '#03396c', opacity=1)
-            grad.add_stop(1.00, '#011f4b', opacity=1)
             return grad
 
         # Inspired by Ceasium 137 glow
@@ -341,9 +320,6 @@ class CoverImage:
 if __name__ == "__main__":
     cover_bw = CoverImage(color_theme="bw")
     cover_bw.create_svg("cover_bw.svg")
-
-    cover_dblue = CoverImage(color_theme="vivi")
-    cover_dblue.create_svg("cover_vivi.svg")
 
     cover_blue = CoverImage(color_theme="blue")
     cover_blue.create_svg("cover_blue.svg")
