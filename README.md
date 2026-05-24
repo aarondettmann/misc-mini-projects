@@ -22,6 +22,13 @@ See [ionizing_radiation_art](ionizing_radiation_art).
 
 ![Ionizing raditaion art](ionizing_radiation_art/cover_blue_animation.svg)
 
+### Deadly Slugs
+
+See [deadly_slugs](deadly_slugs).
+
+| ![Screenshot 1](deadly_slugs/screenshots/01.png) | ![Screenshot 2](deadly_slugs/screenshots/02.png) |
+| --- | --- | 
+
 ### Plane Rotation using Complex Numbers
 
 See [plane_rotation](plane_rotation).
