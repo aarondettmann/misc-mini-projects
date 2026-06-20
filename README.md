@@ -11,6 +11,14 @@ A collection of small, miscellaneous code snippets and experiments.
 
 ![Barnsley fern](barnsley_fern/barnsley_fern.png)
 
+### Mandelbrot Set
+
+* **Files:** [mandelbrot_set](mandelbrot_set).
+* **References:** [Mandelbrot set, Wikipedia](https://en.wikipedia.org/wiki/Mandelbrot_set)
+
+| ![Overview](mandelbrot_set/mandelbrot_overview.png) | ![Seahorse](mandelbrot_set/mandelbrot_seahorse.png) |
+| --- | --- | 
+
 ### Perlin Noise
 
 * **Files:** [perlin_noise](perlin_noise).
