@@ -2,6 +2,20 @@
 
 A collection of small, miscellaneous code snippets and experiments.
 
+## Installation
+
+Each mini project has its own `requirements.txt` inside its folder.
+
+To install dependencies for one project:
+
+```bash
+cd <project-folder>
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
 ## Projects
 
 ### Barnsley Fern
