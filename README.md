@@ -46,6 +46,13 @@ python -m pip install -r requirements.txt
 
 ![Ionizing raditaion art](ionizing_radiation_art/cover_blue_animation.svg)
 
+### Runge-Kutta 4 Solver
+
+* **Files:** [runge_kutta_4](runge_kutta_4).
+* **References:** [Runge-Kutta methods, Wikipedia](https://en.wikipedia.org/wiki/Runge%E2%80%93Kutta_methods)
+
+![Underdamped oscillator comparison](runge_kutta_4/examples/rk4_vs_exact_damped_oscillator.png)
+
 ### Deadly Slugs
 
 * **Files:** [deadly_slugs](deadly_slugs).
