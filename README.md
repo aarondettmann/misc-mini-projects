@@ -40,6 +40,13 @@ python -m pip install -r requirements.txt
 
 ![Perlin noise generation](perlin_noise/perlin_noise_steps.png)
 
+### Perlin Flow Playground
+
+* **Files:** [perlin_flow_playground](perlin_flow_playground).
+* **References:** [Perlin noise, Wikipedia](https://en.wikipedia.org/wiki/Perlin_noise)
+
+![Perlin flow playground](perlin_flow_playground/perlin_flow_playground.png)
+
 ### Ionizing Radiation Art
 
 * **Files:** [ionizing_radiation_art](ionizing_radiation_art).
@@ -77,7 +84,6 @@ python -m pip install -r requirements.txt
 
 Future mini-projects that fit this repo well:
 
-* **Perlin Flow Playground** — animate particles moving through a Perlin-noise flow field.
 * **Julia Set Zoomer** — reuse the Mandelbrot renderer pattern for a Julia-set companion.
 * **Lorenz Attractor with RK4** — show chaos with a clean RK4-based ODE simulation and animation.
 * **Reaction-Diffusion Art** — generate organic Gray-Scott textures and pattern evolution.
