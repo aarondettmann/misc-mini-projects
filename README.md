@@ -33,6 +33,16 @@ python -m pip install -r requirements.txt
 | ![Overview](mandelbrot_set/mandelbrot_overview.png) | ![Seahorse](mandelbrot_set/mandelbrot_seahorse.png) |
 | --- | --- | 
 
+### Julia Set Zoomer
+
+* **Files:** [julia_set_zoomer](julia_set_zoomer).
+* **References:** [Julia set, Wikipedia](https://en.wikipedia.org/wiki/Julia_set)
+
+| ![Overview](julia_set_zoomer/julia_overview.png) | ![Zoom](julia_set_zoomer/julia_zoom.png) |
+| --- | --- |
+
+![Julia zoom animation](julia_set_zoomer/julia_zoom.gif)
+
 ### Perlin Noise
 
 * **Files:** [perlin_noise](perlin_noise).
@@ -94,12 +104,6 @@ python -m pip install -r requirements.txt
 * **Files:** [plane_rotation](plane_rotation).
 
 ![Plane Rotation](plane_rotation/example.gif)
-
-## Idea
-
-Future mini-projects that fit this repo well:
-
-* **Julia Set Zoomer** — reuse the Mandelbrot renderer pattern for a Julia-set companion.
 
 ## Copyright
 
