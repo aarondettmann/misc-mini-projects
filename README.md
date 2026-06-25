@@ -47,6 +47,13 @@ python -m pip install -r requirements.txt
 
 ![Perlin flow playground](perlin_flow_playground/perlin_flow_playground.png)
 
+### Reaction-Diffusion Art
+
+* **Files:** [reaction_diffusion_art](reaction_diffusion_art).
+* **References:** [Reaction–diffusion system, Wikipedia](https://en.wikipedia.org/wiki/Reaction%E2%80%93diffusion_system)
+
+![Reaction-diffusion art](reaction_diffusion_art/reaction_diffusion_art.gif)
+
 ### Ionizing Radiation Art
 
 * **Files:** [ionizing_radiation_art](ionizing_radiation_art).
@@ -93,7 +100,6 @@ python -m pip install -r requirements.txt
 Future mini-projects that fit this repo well:
 
 * **Julia Set Zoomer** — reuse the Mandelbrot renderer pattern for a Julia-set companion.
-* **Reaction-Diffusion Art** — generate organic Gray-Scott textures and pattern evolution.
 
 ## Copyright
 
