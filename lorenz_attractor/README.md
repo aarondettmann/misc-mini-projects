@@ -58,7 +58,7 @@ That writes:
 
 * The 3D trajectory spirals around two lobes.
 * The moving point traces the current state.
-* The time-series panel shows the x-coordinate evolving as the orbit folds through phase space.
+* The time-series panel shows all three state variables (`x`, `y`, `z`) evolving over time.
 
 ## References
 

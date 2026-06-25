@@ -64,8 +64,16 @@ python -m pip install -r requirements.txt
 
 * **Files:** [lorenz_attractor](lorenz_attractor).
 * **References:** [Lorenz system, Wikipedia](https://en.wikipedia.org/wiki/Lorenz_system)
+* **State:** implemented (includes trajectory + state-variables panel animation).
 
 ![Lorenz attractor](lorenz_attractor/lorenz_attractor.gif)
+
+### Double Pendulum Chaos Demo
+
+* **Files:** [double_pendulum](double_pendulum).
+* **References:** [Double pendulum, Wikipedia](https://en.wikipedia.org/wiki/Double_pendulum)
+
+![Double pendulum](double_pendulum/double_pendulum.gif)
 
 ### Deadly Slugs
 
@@ -85,9 +93,7 @@ python -m pip install -r requirements.txt
 Future mini-projects that fit this repo well:
 
 * **Julia Set Zoomer** — reuse the Mandelbrot renderer pattern for a Julia-set companion.
-* **Lorenz Attractor with RK4** — show chaos with a clean RK4-based ODE simulation and animation.
 * **Reaction-Diffusion Art** — generate organic Gray-Scott textures and pattern evolution.
-* **Double Pendulum Chaos Demo** — visualize chaotic motion with phase portraits and trails.
 
 ## Copyright
 
