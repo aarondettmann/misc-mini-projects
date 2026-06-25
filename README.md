@@ -53,6 +53,13 @@ python -m pip install -r requirements.txt
 
 ![Underdamped oscillator comparison](runge_kutta_4/examples/rk4_vs_exact_damped_oscillator.png)
 
+### Lorenz Attractor
+
+* **Files:** [lorenz_attractor](lorenz_attractor).
+* **References:** [Lorenz system, Wikipedia](https://en.wikipedia.org/wiki/Lorenz_system)
+
+![Lorenz attractor](lorenz_attractor/lorenz_attractor.gif)
+
 ### Deadly Slugs
 
 * **Files:** [deadly_slugs](deadly_slugs).
@@ -65,6 +72,16 @@ python -m pip install -r requirements.txt
 * **Files:** [plane_rotation](plane_rotation).
 
 ![Plane Rotation](plane_rotation/example.gif)
+
+## Idea
+
+Future mini-projects that fit this repo well:
+
+* **Perlin Flow Playground** — animate particles moving through a Perlin-noise flow field.
+* **Julia Set Zoomer** — reuse the Mandelbrot renderer pattern for a Julia-set companion.
+* **Lorenz Attractor with RK4** — show chaos with a clean RK4-based ODE simulation and animation.
+* **Reaction-Diffusion Art** — generate organic Gray-Scott textures and pattern evolution.
+* **Double Pendulum Chaos Demo** — visualize chaotic motion with phase portraits and trails.
 
 ## Copyright
 
