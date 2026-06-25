@@ -30,6 +30,23 @@ def rhs(_t, y):
 times, states = rk4(rhs=rhs, t0=0.0, y0=(1.0, 0.0), h=0.1, n_steps=10)
 ```
 
+## Readable NumPy reference implementation
+
+`rk4` remains the default C-extension-backed solver.  
+For a readable pure-Python/NumPy reference, use `rk4_numpy`:
+
+```python
+from ode.solver import rk4_numpy
+
+def rhs(_t, y):
+    x, v = y
+    return (v, -x)
+
+times, states = rk4_numpy(rhs=rhs, t0=0.0, y0=(1.0, 0.0), h=0.1, n_steps=10)
+```
+
+This is useful for understanding, debugging, and comparing behavior with the C-backed path.
+
 ## Theory
 
 The RK4 method solves an initial-value problem for an ordinary differential equation,
