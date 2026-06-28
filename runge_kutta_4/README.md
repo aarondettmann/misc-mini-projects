@@ -2,6 +2,8 @@
 
 `ode` is a small Python package that exposes a classical fourth-order Runge-Kutta (RK4) ODE integrator backed by a C extension. It supports scalar initial values and vector-valued systems, and is intended as a compact, readable reference implementation.
 
+It also provides a velocity-Verlet symplectic integrator for second-order systems such as orbital mechanics and other Hamiltonian demos.
+
 ## Quick start
 
 ```bash
@@ -28,6 +30,25 @@ def rhs(_t, y):
     return (v, -x)
 
 times, states = rk4(rhs=rhs, t0=0.0, y0=(1.0, 0.0), h=0.1, n_steps=10)
+```
+
+For second-order systems, the symplectic solver separates positions and velocities:
+
+```python
+from ode.solver import velocity_verlet
+
+def acceleration(_t, q):
+    x, = q
+    return (-x,)
+
+times, states = velocity_verlet(
+    acceleration=acceleration,
+    t0=0.0,
+    q0=(1.0,),
+    v0=(0.0,),
+    h=0.1,
+    n_steps=10,
+)
 ```
 
 ## Theory
@@ -64,3 +85,9 @@ $$
 The left panel shows the displacement over time, and the right panel shows the phase portrait. The RK4 trajectory closely matches the exact solution in both views.
 
 A phase portrait plots the system state variables against each other, such as position versus velocity, instead of plotting them against time.
+
+`examples/three_body_problem.py` simulates a stable equal-mass planar three-body orbit with a symplectic velocity-Verlet integrator and renders both a summary figure and an animation.
+
+![Three-body summary](examples/three_body_problem.png)
+
+![Three-body animation](examples/three_body_problem.gif)
