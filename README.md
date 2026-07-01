@@ -72,6 +72,22 @@ python -m pip install -r requirements.txt
 
 ![Plane Rotation](plane_rotation/example.gif)
 
+## Maintenance
+
+### C Code Formatting
+
+Format all C source and header files in the project with `clang-format`:
+
+```sh
+find . \
+    \( -type d \( -name .git -o -name .venv \) -prune \) \
+    -o \( -name "*.c" -o -name "*.h" \) -print0 \
+| xargs -0 -r clang-format -i
+```
+
+This command recursively finds all `.c` and `.h` files and formats them in
+place using the project's `.clang-format` configuration.
+
 ## Copyright
 
 Copyright Aaron Dettmann.
