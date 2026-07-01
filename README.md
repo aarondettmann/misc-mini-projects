@@ -46,6 +46,12 @@ python -m pip install -r requirements.txt
 
 ![Ionizing raditaion art](ionizing_radiation_art/cover_blue_animation.svg)
 
+### Cnake (a simple terminal-based snake game)
+
+* **Files:** [cnake](cnake).
+
+![Cnake screenshot](cnake/cnake_screenshot.png)
+
 ### Deadly Slugs
 
 * **Files:** [deadly_slugs](deadly_slugs).
