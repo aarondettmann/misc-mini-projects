@@ -61,32 +61,32 @@ static volatile sig_atomic_t interrupted = 0;
 
 int main(int argc, char *argv[]) {
   /*---------- Variable Declarations ----------*/
-  int i, j,    /* Loop variables                                              */
-      bs = 0,  /* Board size --> side length of the playing field             */
-      discard, /* Discard long board-size input */
-      x, y, x_old, y_old, /* Position coordinates */
-      exit = 0,     /* Evaluated in the main loop --> Game Over!; Win!; ...   */
-      cmd_status,   /* Command read status */
-      length = 1,   /* Length of the snake */
-      numofobs = 0, /* Number of obstacles   */
-      target_numofobs,      /* Desired number of obstacles */
-      stats[3] = {0, 0, 0}, /* Statistics [moves][snacks eaten][poison eaten] */
-      show = 0,             /* Show/Hide debug output             */
-      spawn_snack = 0,      /* Respawn snack after tail update */
-      spawn_poison = 0,     /* Respawn poison after tail update */
-      **board; /* Game board                                                  */
+  int i, j,               // Loop variables
+      bs = 0,             // Board size --> side length of the playing field
+      discard,            // Discard long board-size input
+      x, y, x_old, y_old, // Position coordinates
+      exit = 0,        // Evaluated in the main loop --> Game Over!; Win!; ...
+      cmd_status,      // Command read status
+      length = 1,      // Length of the snake
+      numofobs = 0,    // Number of obstacles
+      target_numofobs, // Desired number of obstacles
+      stats[3] = {0, 0, 0}, // Statistics [moves][snacks eaten][poison eaten]
+      show = 0,             // Show/Hide debug output
+      spawn_snack = 0,      // Respawn snack after tail update
+      spawn_poison = 0,     // Respawn poison after tail update
+      **board;              // Game board
   long parsed_bs;
 
-  char cmd = 'x',           /* Command        */
-      board_size_input[32], /* Board-size prompt input */
-      *endptr,              /* Parsed board-size suffix */
-      *newline,             /* Trailing newline position */
-      terra = ' ',          /* ( 0) Empty tile */
-      body = '=',           /* (>0) Body       */
-      head = '>',           /* (-1) Head       */
-      obstacle = '#',       /* (-2) Obstacle   */
-      snack = '*',          /* (-3) Snack      */
-      poison = '!';         /* (-4) Poison     */
+  char cmd = 'x',           // Command
+      board_size_input[32], // Board-size prompt input
+      *endptr,              // Parsed board-size suffix
+      *newline,             // Trailing newline position
+      terra = ' ',          // ( 0) Empty tile
+      body = '=',           // (>0) Body
+      head = '>',           // (-1) Head
+      obstacle = '#',       // (-2) Obstacle
+      snack = '*',          // (-3) Snack
+      poison = '!';         // (-4) Poison
   struct sigaction action;
 
   x = y = x_old = y_old = 0;
