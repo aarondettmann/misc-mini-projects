@@ -7,10 +7,10 @@
 
 #include <errno.h>
 #include <signal.h>
-#include <sys/select.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/select.h>
 #include <termios.h>
 #include <time.h>
 #include <unistd.h>
@@ -61,8 +61,8 @@ static volatile sig_atomic_t interrupted = 0;
 
 int main(int argc, char *argv[]) {
   /*---------- Variable Declarations ----------*/
-  int i, j,   /* Loop variables                                              */
-      bs = 0, /* Board size --> side length of the playing field             */
+  int i, j,    /* Loop variables                                              */
+      bs = 0,  /* Board size --> side length of the playing field             */
       discard, /* Discard long board-size input */
       x, y, x_old, y_old, /* Position coordinates */
       exit = 0,     /* Evaluated in the main loop --> Game Over!; Win!; ...   */
@@ -77,16 +77,16 @@ int main(int argc, char *argv[]) {
       **board; /* Game board                                                  */
   long parsed_bs;
 
-  char cmd = 'x',     /* Command        */
+  char cmd = 'x',           /* Command        */
       board_size_input[32], /* Board-size prompt input */
       *endptr,              /* Parsed board-size suffix */
       *newline,             /* Trailing newline position */
-      terra = ' ',    /* ( 0) Empty tile */
-      body = '=',     /* (>0) Body       */
-      head = '>',     /* (-1) Head       */
-      obstacle = '#', /* (-2) Obstacle   */
-      snack = '*',    /* (-3) Snack      */
-      poison = '!';   /* (-4) Poison     */
+      terra = ' ',          /* ( 0) Empty tile */
+      body = '=',           /* (>0) Body       */
+      head = '>',           /* (-1) Head       */
+      obstacle = '#',       /* (-2) Obstacle   */
+      snack = '*',          /* (-3) Snack      */
+      poison = '!';         /* (-4) Poison     */
   struct sigaction action;
 
   x = y = x_old = y_old = 0;
