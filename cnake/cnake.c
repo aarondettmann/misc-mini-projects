@@ -7,6 +7,7 @@
 
 #include <errno.h>
 #include <signal.h>
+#include <sys/select.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -15,7 +16,7 @@
 #include <unistd.h>
 
 /*---------- Version ----------*/
-#define VERSION "0.4.0"
+#define VERSION "0.4.1"
 #define DEFAULT_BOARD_SIZE 6
 
 /*---------- Colors ----------*/
@@ -37,6 +38,8 @@
 void sig_handler(int signo);
 int init_terminal(void);
 void restore_terminal(void);
+int read_stdin_char(char *, int);
+void discard_escape_sequence(void);
 int read_command(char *);
 void hl(void);
 void border(int length);
@@ -286,6 +289,9 @@ int main(int argc, char *argv[]) {
         return 5;
       }
 
+      if (cmd_status == 2)
+        continue;
+
       if (cmd_status == 0) {
         if (interrupted)
           break;
@@ -479,32 +485,94 @@ void restore_terminal(void) {
   terminal_initialized = 0;
 }
 
-/*---------- Read One Command ----------*/
-int read_command(char *cmd) {
-  int input;
+/*---------- Read One Byte from Standard Input ----------*/
+int read_stdin_char(char *cmd, int timeout_ms) {
+  fd_set readfds;
+  struct timeval timeout;
+  ssize_t bytes_read;
+  int ready;
 
-  do {
-    errno = 0;
-    input = getchar();
+  while (1) {
+    FD_ZERO(&readfds);
+    FD_SET(STDIN_FILENO, &readfds);
 
-    if (input == EOF) {
+    if (timeout_ms < 0)
+      ready = select(STDIN_FILENO + 1, &readfds, NULL, NULL, NULL);
+    else {
+      timeout.tv_sec = timeout_ms / 1000;
+      timeout.tv_usec = (timeout_ms % 1000) * 1000;
+      ready = select(STDIN_FILENO + 1, &readfds, NULL, NULL, &timeout);
+    }
+
+    if (ready == 0)
+      return 0;
+
+    if (ready == -1) {
+      if (errno == EINTR) {
+        if (interrupted)
+          return 0;
+
+        continue;
+      }
+
+      return -1;
+    }
+
+    bytes_read = read(STDIN_FILENO, cmd, 1);
+
+    if (bytes_read == 1)
+      return 1;
+
+    if (bytes_read == 0)
+      return 0;
+
+    if (errno == EINTR) {
       if (interrupted)
         return 0;
 
-      if (ferror(stdin)) {
-        if (errno == EINTR) {
-          clearerr(stdin);
-          continue;
-        }
-
-        return -1;
-      }
-
-      return 0;
+      continue;
     }
-  } while (input == '\n' || input == '\r');
 
-  *cmd = (char)input;
+    return -1;
+  }
+}
+
+/*---------- Discard an Unsupported Escape Sequence ----------*/
+void discard_escape_sequence(void) {
+  char input;
+  int status;
+
+  status = read_stdin_char(&input, 10);
+  if (status != 1)
+    return;
+
+  if (input != '[' && input != 'O') {
+    while (read_stdin_char(&input, 5) == 1)
+      ;
+
+    return;
+  }
+
+  do {
+    status = read_stdin_char(&input, 5);
+  } while (status == 1 && (input < '@' || input > '~'));
+}
+
+/*---------- Read One Command ----------*/
+int read_command(char *cmd) {
+  int status;
+
+  do {
+    status = read_stdin_char(cmd, -1);
+    if (status != 1)
+      return status;
+  } while (*cmd == '\n' || *cmd == '\r');
+
+  if (*cmd == '\033') {
+    discard_escape_sequence();
+    return 2;
+  }
+
   return 1;
 }
 
