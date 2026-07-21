@@ -57,6 +57,8 @@ enum command_result {
 */
 
 #define CLEAR "\033[H\033[0J"
+#define BOARD_TILE(board, board_size, x_pos, y_pos) \
+  ((board)[(y_pos) * (board_size) + (x_pos)])
 
 /*---------- Function Prototypes ----------*/
 void sig_handler(int signo);
@@ -67,22 +69,22 @@ void discard_escape_sequence(void);
 int read_command(char *);
 void hl(void);
 void draw_border(int board_size);
-void draw_game_board(int **, int, char, char, char, char, char, char,
+void draw_game_board(int *, int, char, char, char, char, char, char,
                      const int[3], int, int);
-void print_game_status_message(enum game_status, char, char, char);
+void print_game_status_message(enum game_status, char, char, char, char);
 void help(void);
 enum board_size_parse_status parse_board_size(const char *, int *);
-void free_board(int **, int);
+void free_board(int *);
 enum command_result handle_player_command(int, char *, char *, int *, int *,
                                           int *, int *, int *);
-int has_adjacent_obstacle(int **, int, int, int);
-int is_spawn_position_valid(int **, int, int, int, int);
-int find_spawn_position(int **, int, int, int *, int *);
+int has_adjacent_obstacle(int *, int, int, int);
+int is_spawn_position_valid(int *, int, int, int, int);
+int find_spawn_position(int *, int, int, int *, int *);
 enum game_status handle_tile_effect(int, int *, int[3], int *, int *);
-void advance_snake(int **, int, int, int, int, int, int);
-int respawn_tile_if_needed(int **, int, int, int);
-int place_tile(int **, int, int);
-int board_contains_value(int **, int, int);
+void advance_snake(int *, int, int, int, int, int, int);
+int respawn_tile_if_needed(int *, int, int, int);
+int place_tile(int *, int, int);
+int board_contains_value(int *, int, int);
 
 /*---------- Terminal State ----------*/
 static struct termios original_terminal;
@@ -95,7 +97,7 @@ static volatile sig_atomic_t interrupted = 0;
 
 int main(int argc, char *argv[]) {
   /*---------- Variable Declarations ----------*/
-  int i, j,               // Loop variables
+  int i,                  // Loop variables
       bs = 0,             // Board size --> side length of the playing field
       discard,            // Discard long board-size input
       x, y, x_old, y_old, // Position coordinates
@@ -105,8 +107,8 @@ int main(int argc, char *argv[]) {
       stats[3] = {0, 0, 0}, // Statistics [moves][snacks eaten][poison eaten]
       show = 0,             // Show/Hide debug output
       spawn_snack = 0,      // Respawn snack after tail update
-      spawn_poison = 0,     // Respawn poison after tail update
-      **board = NULL;       // Game board
+      spawn_poison = 0;     // Respawn poison after tail update
+  int *board = NULL;        // Game board
   char cmd = '\0',          // Command
       board_size_input[32], // Board-size prompt input
       *newline,             // Trailing newline position
@@ -177,25 +179,15 @@ int main(int argc, char *argv[]) {
     } while (!bs);
   }
 
-  if ((board = (int **)malloc(bs * sizeof(int *))) == NULL)
+  board = (int *)calloc((size_t)bs * (size_t)bs, sizeof(*board));
+  if (board == NULL)
     return 2;
-
-  for (i = 0; i < bs; i++)
-    if ((board[i] = (int *)malloc(bs * sizeof(int))) == NULL) {
-      free_board(board, i);
-      return 2;
-    }
-
-  /*---------- Initialize the Board ----------*/
-  for (i = 0; i < bs; i++)
-    for (j = 0; j < bs; j++)
-      board[i][j] = 0;
 
   /*---------- Seed rand() ----------*/
   srand(time(NULL));
 
   /*---------- Starting Position ----------*/
-  board[y][x] = -1; /* head */
+  BOARD_TILE(board, bs, x, y) = -1; /* head */
 
   /*---------- Generate Random Positions ----------*/
   target_numofobs = (int)(((bs * bs) / 10) + 1);
@@ -208,13 +200,13 @@ int main(int argc, char *argv[]) {
 
   if (!place_tile(board, bs, -4) || !place_tile(board, bs, -3)) {
     fprintf(stderr, "Error: Unable to place all tiles on the board.\n");
-    free_board(board, bs);
+    free_board(board);
     return 3;
   }
 
   if (!init_terminal()) {
     fprintf(stderr, "Error: Unable to enable direct input mode.\n");
-    free_board(board, bs);
+    free_board(board);
     return 4;
   }
 
@@ -230,7 +222,7 @@ int main(int argc, char *argv[]) {
                     stats, length, show);
 
     if (game_status != GAME_RUNNING) {
-      print_game_status_message(game_status, body, obstacle, poison);
+      print_game_status_message(game_status, body, head, obstacle, poison);
       break;
     }
 
@@ -240,7 +232,7 @@ int main(int argc, char *argv[]) {
     command_result = handle_player_command(bs, &cmd, &head, &x, &y, &length,
                                            &show, &stats[0]);
     if (command_result == COMMAND_ERROR) {
-      free_board(board, bs);
+      free_board(board);
       return 5;
     }
 
@@ -250,8 +242,8 @@ int main(int argc, char *argv[]) {
     if (command_result == COMMAND_SKIP_TURN)
       continue;
 
-    game_status = handle_tile_effect(board[y][x], &length, stats, &spawn_snack,
-                                     &spawn_poison);
+    game_status = handle_tile_effect(BOARD_TILE(board, bs, x, y), &length, stats,
+                                     &spawn_snack, &spawn_poison);
     if (game_status != GAME_RUNNING)
       continue;
 
@@ -259,13 +251,13 @@ int main(int argc, char *argv[]) {
 
     if (!respawn_tile_if_needed(board, bs, spawn_snack, -3)) {
       fprintf(stderr, "Error: Unable to place a snack.\n");
-      free_board(board, bs);
+      free_board(board);
       return 3;
     }
 
     if (!respawn_tile_if_needed(board, bs, spawn_poison, -4)) {
       fprintf(stderr, "Error: Unable to place poison.\n");
-      free_board(board, bs);
+      free_board(board);
       return 3;
     }
 
@@ -279,7 +271,7 @@ int main(int argc, char *argv[]) {
   restore_terminal();
 
   if (interrupted) {
-    free_board(board, bs);
+    free_board(board);
     printf(RES "\n\n");
     return 128 + interrupted;
   }
@@ -290,7 +282,7 @@ int main(int argc, char *argv[]) {
   printf("Poison:\t%4d\n", stats[2]);
   printf("Length:\t\t%d/%d+\n\n", length, (bs * bs - numofobs - 1));
 
-  free_board(board, bs);
+  free_board(board);
   return 0;
 
 } /* End of main() */
@@ -440,10 +432,10 @@ void draw_border(int board_size) {
 }
 
 /*---------- Draw the Game Board ----------*/
-void draw_game_board(int *boardl[], int bsl, char terra, char body, char head,
+void draw_game_board(int *boardl, int bsl, char terra, char body, char head,
                      char obstacle, char snack, char poison, const int stats[3],
                      int length, int show) {
-  int i, j;
+  int i, j, tile_value;
 
   draw_border(bsl);
 
@@ -451,17 +443,19 @@ void draw_game_board(int *boardl[], int bsl, char terra, char body, char head,
     printf(GRN " | ");
 
     for (j = 0; j < bsl; j++) {
-      if (boardl[i][j] > 0)
+      tile_value = BOARD_TILE(boardl, bsl, j, i);
+
+      if (tile_value > 0)
         printf(RED "%c ", body);
-      else if (boardl[i][j] == 0)
+      else if (tile_value == 0)
         printf(RES "%c ", terra);
-      else if (boardl[i][j] == -1)
+      else if (tile_value == -1)
         printf(RED "%c ", head);
-      else if (boardl[i][j] == -2)
+      else if (tile_value == -2)
         printf(BLU "%c ", obstacle);
-      else if (boardl[i][j] == -3)
+      else if (tile_value == -3)
         printf(YEL "%c ", snack);
-      else if (boardl[i][j] == -4)
+      else if (tile_value == -4)
         printf(GRN "%c ", poison);
     }
 
@@ -488,7 +482,7 @@ void draw_game_board(int *boardl[], int bsl, char terra, char body, char head,
       printf("|");
 
       for (j = 0; j < bsl; j++)
-        printf("%2d ", boardl[i][j]);
+        printf("%2d ", BOARD_TILE(boardl, bsl, j, i));
 
       printf("|\n");
     }
@@ -496,7 +490,7 @@ void draw_game_board(int *boardl[], int bsl, char terra, char body, char head,
 }
 
 /*---------- Print the Game Status Message ----------*/
-void print_game_status_message(enum game_status game_status, char body,
+void print_game_status_message(enum game_status game_status, char body, char head,
                                char obstacle, char poison) {
   if (game_status == GAME_WON) {
     printf("\nYOU WIN!\n");
@@ -504,7 +498,7 @@ void print_game_status_message(enum game_status game_status, char body,
   }
 
   if (game_status == GAME_OVER_SNAKE)
-    printf("\nSnake!" RED " %c%c> " RES, body, body);
+    printf("\nSnake!" RED " %c%c%c " RES, body, body, head);
   else if (game_status == GAME_OVER_OBSTACLE)
     printf("\nObstacle!" BLU " %c " RES, obstacle);
   else if (game_status == GAME_OVER_POISON)
@@ -552,17 +546,7 @@ enum board_size_parse_status parse_board_size(const char *input,
 }
 
 /*---------- Free the Game Board ----------*/
-void free_board(int **board, int rows) {
-  int i;
-
-  if (board == NULL)
-    return;
-
-  for (i = 0; i < rows; i++)
-    free(board[i]);
-
-  free(board);
-}
+void free_board(int *board) { free(board); }
 
 /*---------- Read and Apply One Player Command ----------*/
 enum command_result handle_player_command(int board_size, char *cmd, char *head,
@@ -642,7 +626,7 @@ enum command_result handle_player_command(int board_size, char *cmd, char *head,
 }
 
 /*---------- Check Whether an Obstacle Would Spawn Too Close ----------*/
-int has_adjacent_obstacle(int *boardl[], int bsl, int x_pos, int y_pos) {
+int has_adjacent_obstacle(int *boardl, int bsl, int x_pos, int y_pos) {
   int x_check, y_check;
 
   for (y_check = y_pos - 1; y_check <= y_pos + 1; y_check++)
@@ -653,7 +637,7 @@ int has_adjacent_obstacle(int *boardl[], int bsl, int x_pos, int y_pos) {
       if (y_check == y_pos && x_check == x_pos)
         continue;
 
-      if (boardl[y_check][x_check] == -2)
+      if (BOARD_TILE(boardl, bsl, x_check, y_check) == -2)
         return 1;
     }
 
@@ -661,9 +645,9 @@ int has_adjacent_obstacle(int *boardl[], int bsl, int x_pos, int y_pos) {
 }
 
 /*---------- Check Whether a Spawn Position Is Valid ----------*/
-int is_spawn_position_valid(int *boardl[], int bsl, int x_pos, int y_pos,
+int is_spawn_position_valid(int *boardl, int bsl, int x_pos, int y_pos,
                             int type) {
-  if (boardl[y_pos][x_pos] != 0)
+  if (BOARD_TILE(boardl, bsl, x_pos, y_pos) != 0)
     return 0;
 
   if (type == -2 && has_adjacent_obstacle(boardl, bsl, x_pos, y_pos))
@@ -673,7 +657,7 @@ int is_spawn_position_valid(int *boardl[], int bsl, int x_pos, int y_pos,
 }
 
 /*---------- Find a Valid Position for a Tile ----------*/
-int find_spawn_position(int *boardl[], int bsl, int type, int *x_out,
+int find_spawn_position(int *boardl, int bsl, int type, int *x_out,
                         int *y_out) {
   int i, index, total, x_pos, y_pos, start;
 
@@ -730,45 +714,45 @@ enum game_status handle_tile_effect(int tile_value, int *length, int stats[3],
 }
 
 /*---------- Advance the Snake ----------*/
-void advance_snake(int *boardl[], int bsl, int x_pos, int y_pos,
+void advance_snake(int *boardl, int bsl, int x_pos, int y_pos,
                    int x_previous, int y_previous, int length) {
   int i, j;
 
-  boardl[y_pos][x_pos] = -1; /* Head position */
-  boardl[y_previous][x_previous] =
+  BOARD_TILE(boardl, bsl, x_pos, y_pos) = -1; /* Head position */
+  BOARD_TILE(boardl, bsl, x_previous, y_previous) =
       length; /* Store the snake length at the previous head position */
 
   for (i = 0; i < bsl; i++)
     for (j = 0; j < bsl; j++)
-      if (boardl[i][j] > 0) /* All values >0 are snake body segments */
-        boardl[i][j] -= 1;
+      if (BOARD_TILE(boardl, bsl, j, i) > 0) /* All values >0 are snake body segments */
+        BOARD_TILE(boardl, bsl, j, i) -= 1;
 }
 
 /*---------- Respawn a Consumed Tile ----------*/
-int respawn_tile_if_needed(int *boardl[], int bsl, int should_respawn,
+int respawn_tile_if_needed(int *boardl, int bsl, int should_respawn,
                            int type) {
   return !should_respawn || place_tile(boardl, bsl, type) ||
          !board_contains_value(boardl, bsl, 0);
 }
 
 /*---------- Place a Tile on the Board ----------*/
-int place_tile(int *boardl[], int bsl, int type) {
+int place_tile(int *boardl, int bsl, int type) {
   int x_pos, y_pos;
 
   if (!find_spawn_position(boardl, bsl, type, &x_pos, &y_pos))
     return 0;
 
-  boardl[y_pos][x_pos] = type;
+  BOARD_TILE(boardl, bsl, x_pos, y_pos) = type;
   return 1;
 }
 
 /*---------- Search for a Value in the Matrix ----------*/
-int board_contains_value(int *boardl[], int bsl, int value) {
+int board_contains_value(int *boardl, int bsl, int value) {
   int i, j;
 
   for (i = 0; i < bsl; i++)
     for (j = 0; j < bsl; j++)
-      if (boardl[i][j] == value)
+      if (BOARD_TILE(boardl, bsl, j, i) == value)
         return 1; /* Value found */
 
   return 0;
