@@ -54,6 +54,7 @@ void hl(void);
 void border(int length);
 void help(void);
 enum board_size_parse_status parse_board_size(const char *, int *);
+void free_board(int **, int);
 int has_adjacent_obstacle(int **, int, int, int);
 int is_spawn_position_valid(int **, int, int, int, int);
 int find_spawn_position(int **, int, int, int *, int *);
@@ -84,7 +85,7 @@ int main(int argc, char *argv[]) {
       show = 0,             // Show/Hide debug output
       spawn_snack = 0,      // Respawn snack after tail update
       spawn_poison = 0,     // Respawn poison after tail update
-      **board;              // Game board
+      **board = NULL;       // Game board
   char cmd = 'x',           // Command
       board_size_input[32], // Board-size prompt input
       *newline,             // Trailing newline position
@@ -157,8 +158,10 @@ int main(int argc, char *argv[]) {
     return 2;
 
   for (i = 0; i < bs; i++)
-    if ((board[i] = (int *)malloc(bs * sizeof(int))) == NULL)
+    if ((board[i] = (int *)malloc(bs * sizeof(int))) == NULL) {
+      free_board(board, i);
       return 2;
+    }
 
   /*---------- Initialize the Board ----------*/
   for (i = 0; i < bs; i++)
@@ -182,11 +185,13 @@ int main(int argc, char *argv[]) {
 
   if (!place_tile(board, bs, -4) || !place_tile(board, bs, -3)) {
     fprintf(stderr, "Error: Unable to place all tiles on the board.\n");
+    free_board(board, bs);
     return 3;
   }
 
   if (!init_terminal()) {
     fprintf(stderr, "Error: Unable to enable direct input mode.\n");
+    free_board(board, bs);
     return 4;
   }
 
@@ -280,6 +285,7 @@ int main(int argc, char *argv[]) {
       cmd_status = read_command(&cmd);
       if (cmd_status == -1) {
         fprintf(stderr, "\nError: Unable to read a command.\n");
+        free_board(board, bs);
         return 5;
       }
 
@@ -408,12 +414,14 @@ int main(int argc, char *argv[]) {
     if (spawn_snack && !place_tile(board, bs, -3) &&
         find_element(board, bs, 0) != 0) {
       fprintf(stderr, "Error: Unable to place a snack.\n");
+      free_board(board, bs);
       return 3;
     }
 
     if (spawn_poison && !place_tile(board, bs, -4) &&
         find_element(board, bs, 0) != 0) {
       fprintf(stderr, "Error: Unable to place poison.\n");
+      free_board(board, bs);
       return 3;
     }
 
@@ -429,6 +437,7 @@ int main(int argc, char *argv[]) {
   restore_terminal();
 
   if (interrupted) {
+    free_board(board, bs);
     printf(RES "\n\n");
     return 128 + interrupted;
   }
@@ -439,6 +448,7 @@ int main(int argc, char *argv[]) {
   printf("Poison:\t%4d\n", stats[2]);
   printf("Length:\t\t%d/%d+\n\n", length, (bs * bs - numofobs - 1));
 
+  free_board(board, bs);
   return 0;
 
 } /* End of main() */
@@ -623,6 +633,19 @@ enum board_size_parse_status parse_board_size(const char *input,
 
   *board_size = (int)parsed_bs;
   return BOARD_SIZE_VALID;
+}
+
+/*---------- Free the Game Board ----------*/
+void free_board(int **board, int rows) {
+  int i;
+
+  if (board == NULL)
+    return;
+
+  for (i = 0; i < rows; i++)
+    free(board[i]);
+
+  free(board);
 }
 
 /*---------- Check Whether an Obstacle Would Spawn Too Close ----------*/
