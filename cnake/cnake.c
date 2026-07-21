@@ -258,7 +258,7 @@ int main(int argc, char *argv[]) {
       }
 
       if (exit == 2)
-        printf("\nSnake!" RED " %c%c> " RES, body, body);
+        printf("\nSnake!" RED " %c%c%c " RES, body, body, head);
       else if (exit == 3)
         printf("\nObstacle!" BLU " %c " RES, obstacle);
       else if (exit == 4)
@@ -300,12 +300,14 @@ int main(int argc, char *argv[]) {
       } else if (cmd == 'k') {
         hl();
         printf("==> Up!\n\n");
+        head = '^';
         y -= 1;
         if (y < 0)
           y = bs - 1;
       } else if (cmd == 'j') {
         hl();
         printf("==> Down!\n\n");
+        head = 'v';
         y += 1;
         if (y > bs - 1)
           y = 0;
