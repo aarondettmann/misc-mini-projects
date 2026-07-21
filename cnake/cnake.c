@@ -28,6 +28,14 @@ enum board_size_parse_status {
   BOARD_SIZE_VALID
 };
 
+enum game_status {
+  GAME_RUNNING = 0,
+  GAME_WON,
+  GAME_OVER_SNAKE,
+  GAME_OVER_OBSTACLE,
+  GAME_OVER_POISON
+};
+
 /*---------- Colors ----------*/
 #define RED "\x1B[31m" /* red */
 #define GRN "\x1B[32m" /* green */
@@ -51,7 +59,7 @@ int read_stdin_char(char *, int);
 void discard_escape_sequence(void);
 int read_command(char *);
 void hl(void);
-void border(int length);
+void draw_border(int board_size);
 void help(void);
 enum board_size_parse_status parse_board_size(const char *, int *);
 void free_board(int **, int);
@@ -59,7 +67,7 @@ int has_adjacent_obstacle(int **, int, int, int);
 int is_spawn_position_valid(int **, int, int, int, int);
 int find_spawn_position(int **, int, int, int *, int *);
 int place_tile(int **, int, int);
-int find_element(int **, int, int);
+int board_contains_value(int **, int, int);
 
 /*---------- Terminal State ----------*/
 static struct termios original_terminal;
@@ -76,7 +84,6 @@ int main(int argc, char *argv[]) {
       bs = 0,             // Board size --> side length of the playing field
       discard,            // Discard long board-size input
       x, y, x_old, y_old, // Position coordinates
-      exit = 0,        // Evaluated in the main loop --> Game Over!; Win!; ...
       cmd_status,      // Command read status
       length = 1,      // Length of the snake
       numofobs = 0,    // Number of obstacles
@@ -97,6 +104,7 @@ int main(int argc, char *argv[]) {
       poison = '!';         // (-4) Poison
   struct sigaction action;
   enum board_size_parse_status board_size_status;
+  enum game_status game_status = GAME_RUNNING;
 
   x = y = x_old = y_old = 0;
 
@@ -204,7 +212,7 @@ int main(int argc, char *argv[]) {
       break;
 
     /*---------- Draw the Game Board ----------*/
-    border(bs);
+    draw_border(bs);
 
     for (i = 0; i < bs; i++) {
       printf(GRN " | ");
@@ -238,7 +246,7 @@ int main(int argc, char *argv[]) {
       printf(RES "\n");
     }
 
-    border(bs);
+    draw_border(bs);
 
     /*---------- Display board[][] values - FOR DEBUGGING ONLY! ----------*/
     if (show) {
@@ -255,18 +263,18 @@ int main(int argc, char *argv[]) {
     }
 
     /*---------- Check Win/Loss Condition ----------*/
-    if (exit) {
+    if (game_status != GAME_RUNNING) {
 
-      if (exit == 1) {
+      if (game_status == GAME_WON) {
         printf("\nYOU WIN!\n");
         break;
       }
 
-      if (exit == 2)
+      if (game_status == GAME_OVER_SNAKE)
         printf("\nSnake!" RED " %c%c%c " RES, body, body, head);
-      else if (exit == 3)
+      else if (game_status == GAME_OVER_OBSTACLE)
         printf("\nObstacle!" BLU " %c " RES, obstacle);
-      else if (exit == 4)
+      else if (game_status == GAME_OVER_POISON)
         printf("\nPoison!" GRN " %c " RES, poison);
 
       printf("~ GAME OVER!\n");
@@ -374,11 +382,11 @@ int main(int argc, char *argv[]) {
 
     if (board[y][x] > 0) /* Collision with snake body */
     {
-      exit = 2;
+      game_status = GAME_OVER_SNAKE;
       continue;
     } else if (board[y][x] == -2) /* Collision with obstacle */
     {
-      exit = 3;
+      game_status = GAME_OVER_OBSTACLE;
       continue;
     } else if (board[y][x] == -3) /* Snack found */
     {
@@ -395,7 +403,7 @@ int main(int argc, char *argv[]) {
         length -= 1;
         spawn_poison = 1;
       } else {
-        exit = 4;
+        game_status = GAME_OVER_POISON;
         continue;
       }
     }
@@ -412,23 +420,23 @@ int main(int argc, char *argv[]) {
           board[i][j] -= 1;
 
     if (spawn_snack && !place_tile(board, bs, -3) &&
-        find_element(board, bs, 0) != 0) {
+        board_contains_value(board, bs, 0) != 0) {
       fprintf(stderr, "Error: Unable to place a snack.\n");
       free_board(board, bs);
       return 3;
     }
 
     if (spawn_poison && !place_tile(board, bs, -4) &&
-        find_element(board, bs, 0) != 0) {
+        board_contains_value(board, bs, 0) != 0) {
       fprintf(stderr, "Error: Unable to place poison.\n");
       free_board(board, bs);
       return 3;
     }
 
     /*---------- Check for Free Tiles ----------*/
-    if (find_element(board, bs, 0) == 0) /* Game won */
+    if (board_contains_value(board, bs, 0) == 0) /* Game won */
     {
-      exit = 1;
+      game_status = GAME_WON;
       continue;
     }
 
@@ -586,12 +594,12 @@ int read_command(char *cmd) {
 void hl(void) { printf(CLEAR "=========== CNAKE %s ===========\n\n", VERSION); }
 
 /*---------- Draw Outer Board Border ----------*/
-void border(int length) {
+void draw_border(int board_size) {
   int n;
 
   printf(GRN " |");
 
-  for (n = 0; n <= 2 * length; n++)
+  for (n = 0; n <= 2 * board_size; n++)
     printf("-");
 
   printf("|\n" RES);
@@ -714,7 +722,7 @@ int place_tile(int *boardl[], int bsl, int type) {
 }
 
 /*---------- Search for a Value in the Matrix ----------*/
-int find_element(int *boardl[], int bsl, int value) {
+int board_contains_value(int *boardl[], int bsl, int value) {
   int i, j;
 
   for (i = 0; i < bsl; i++)
