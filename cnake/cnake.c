@@ -65,7 +65,7 @@ enum tile_type {
 */
 
 #define CLEAR "\033[H\033[0J"
-#define BOARD_TILE(board, board_size, x_pos, y_pos) \
+#define BOARD_TILE(board, board_size, x_pos, y_pos)                            \
   ((board)[(y_pos) * (board_size) + (x_pos)])
 
 /*---------- Function Prototypes ----------*/
@@ -105,13 +105,13 @@ static volatile sig_atomic_t interrupted = 0;
 
 int main(int argc, char *argv[]) {
   /*---------- Variable Declarations ----------*/
-  int i,                  // Loop variables
-      bs = 0,             // Board size --> side length of the playing field
-      discard,            // Discard long board-size input
-      x, y, x_old, y_old, // Position coordinates
-      length = 1,      // Length of the snake
-      numofobs = 0,    // Number of obstacles
-      target_numofobs, // Desired number of obstacles
+  int i,                    // Loop variables
+      bs = 0,               // Board size --> side length of the playing field
+      discard,              // Discard long board-size input
+      x, y, x_old, y_old,   // Position coordinates
+      length = 1,           // Length of the snake
+      numofobs = 0,         // Number of obstacles
+      target_numofobs,      // Desired number of obstacles
       stats[3] = {0, 0, 0}, // Statistics [moves][snacks eaten][poison eaten]
       show = 0,             // Show/Hide debug output
       spawn_snack = 0,      // Respawn snack after tail update
@@ -156,8 +156,8 @@ int main(int argc, char *argv[]) {
 
   if (!bs) {
     do {
-      printf("Choose the board size [%d-%d] (default: %d): ",
-             MIN_BOARD_SIZE, MAX_BOARD_SIZE, DEFAULT_BOARD_SIZE);
+      printf("Choose the board size [%d-%d] (default: %d): ", MIN_BOARD_SIZE,
+             MAX_BOARD_SIZE, DEFAULT_BOARD_SIZE);
       if (!fgets(board_size_input, sizeof(board_size_input), stdin))
         return 1;
 
@@ -180,8 +180,8 @@ int main(int argc, char *argv[]) {
       }
 
       if (board_size_status == BOARD_SIZE_OUT_OF_RANGE) {
-        printf("Error: Board size must be between %d and %d.\n",
-               MIN_BOARD_SIZE, MAX_BOARD_SIZE);
+        printf("Error: Board size must be between %d and %d.\n", MIN_BOARD_SIZE,
+               MAX_BOARD_SIZE);
         continue;
       }
     } while (!bs);
@@ -251,8 +251,8 @@ int main(int argc, char *argv[]) {
     if (command_result == COMMAND_SKIP_TURN)
       continue;
 
-    game_status = handle_tile_effect(BOARD_TILE(board, bs, x, y), &length, stats,
-                                     &spawn_snack, &spawn_poison);
+    game_status = handle_tile_effect(BOARD_TILE(board, bs, x, y), &length,
+                                     stats, &spawn_snack, &spawn_poison);
     if (game_status != GAME_RUNNING)
       continue;
 
@@ -499,8 +499,8 @@ void draw_game_board(int *boardl, int bsl, char terra, char body, char head,
 }
 
 /*---------- Print the Game Status Message ----------*/
-void print_game_status_message(enum game_status game_status, char body, char head,
-                               char obstacle, char poison) {
+void print_game_status_message(enum game_status game_status, char body,
+                               char head, char obstacle, char poison) {
   if (game_status == GAME_WON) {
     printf("\nYOU WIN!\n");
     return;
@@ -659,8 +659,7 @@ int is_spawn_position_valid(int *boardl, int bsl, int x_pos, int y_pos,
   if (BOARD_TILE(boardl, bsl, x_pos, y_pos) != TILE_EMPTY)
     return 0;
 
-  if (type == TILE_OBSTACLE &&
-      has_adjacent_obstacle(boardl, bsl, x_pos, y_pos))
+  if (type == TILE_OBSTACLE && has_adjacent_obstacle(boardl, bsl, x_pos, y_pos))
     return 0;
 
   return 1;
@@ -724,8 +723,8 @@ enum game_status handle_tile_effect(int tile_value, int *length, int stats[3],
 }
 
 /*---------- Advance the Snake ----------*/
-void advance_snake(int *boardl, int bsl, int x_pos, int y_pos,
-                   int x_previous, int y_previous, int length) {
+void advance_snake(int *boardl, int bsl, int x_pos, int y_pos, int x_previous,
+                   int y_previous, int length) {
   int i, j;
 
   BOARD_TILE(boardl, bsl, x_pos, y_pos) = TILE_HEAD; /* Head position */
