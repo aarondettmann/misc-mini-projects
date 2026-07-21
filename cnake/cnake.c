@@ -5,6 +5,7 @@
  * Purpose: Cnake - Primitive ASCII snake game written in C *
  ************************************************************/
 
+#include <ctype.h>
 #include <errno.h>
 #include <signal.h>
 #include <stdio.h>
@@ -18,6 +19,14 @@
 /*---------- Version ----------*/
 #define VERSION "0.4.1"
 #define DEFAULT_BOARD_SIZE 6
+#define MIN_BOARD_SIZE 4
+#define MAX_BOARD_SIZE 10
+
+enum board_size_parse_status {
+  BOARD_SIZE_INVALID = 0,
+  BOARD_SIZE_OUT_OF_RANGE,
+  BOARD_SIZE_VALID
+};
 
 /*---------- Colors ----------*/
 #define RED "\x1B[31m" /* red */
@@ -44,6 +53,7 @@ int read_command(char *);
 void hl(void);
 void border(int length);
 void help(void);
+enum board_size_parse_status parse_board_size(const char *, int *);
 int has_adjacent_obstacle(int **, int, int, int);
 int is_spawn_position_valid(int **, int, int, int, int);
 int find_spawn_position(int **, int, int, int *, int *);
@@ -75,11 +85,8 @@ int main(int argc, char *argv[]) {
       spawn_snack = 0,      // Respawn snack after tail update
       spawn_poison = 0,     // Respawn poison after tail update
       **board;              // Game board
-  long parsed_bs;
-
   char cmd = 'x',           // Command
       board_size_input[32], // Board-size prompt input
-      *endptr,              // Parsed board-size suffix
       *newline,             // Trailing newline position
       terra = ' ',          // ( 0) Empty tile
       body = '=',           // (>0) Body
@@ -88,6 +95,7 @@ int main(int argc, char *argv[]) {
       snack = '*',          // (-3) Snack
       poison = '!';         // (-4) Poison
   struct sigaction action;
+  enum board_size_parse_status board_size_status;
 
   x = y = x_old = y_old = 0;
 
@@ -109,16 +117,13 @@ int main(int argc, char *argv[]) {
   /*---------- Determine Board Size ----------*/
   hl();
 
-  if (argc > 1) {
-    bs = atoi(argv[1]);
-    if (bs < 4 || bs > 10)
-      bs = 0;
-  }
+  if (argc > 1 && parse_board_size(argv[1], &bs) != BOARD_SIZE_VALID)
+    bs = 0;
 
   if (!bs) {
     do {
-      printf("Choose the board size [4-10] (default: %d): ",
-             DEFAULT_BOARD_SIZE);
+      printf("Choose the board size [%d-%d] (default: %d): ",
+             MIN_BOARD_SIZE, MAX_BOARD_SIZE, DEFAULT_BOARD_SIZE);
       if (!fgets(board_size_input, sizeof(board_size_input), stdin))
         return 1;
 
@@ -132,30 +137,19 @@ int main(int argc, char *argv[]) {
         break;
       }
 
-      errno = 0;
-      parsed_bs = strtol(board_size_input, &endptr, 10);
+      board_size_status = parse_board_size(board_size_input, &bs);
 
-      if (errno != 0 || endptr == board_size_input) {
-        printf("Error: Enter a number from 4 to 10, or press Enter for %d.\n",
-               DEFAULT_BOARD_SIZE);
+      if (board_size_status == BOARD_SIZE_INVALID) {
+        printf("Error: Enter a number from %d to %d, or press Enter for %d.\n",
+               MIN_BOARD_SIZE, MAX_BOARD_SIZE, DEFAULT_BOARD_SIZE);
         continue;
       }
 
-      while (*endptr == ' ' || *endptr == '\t')
-        endptr++;
-
-      if (*endptr != '\n' && *endptr != '\0') {
-        printf("Error: Enter a number from 4 to 10, or press Enter for %d.\n",
-               DEFAULT_BOARD_SIZE);
+      if (board_size_status == BOARD_SIZE_OUT_OF_RANGE) {
+        printf("Error: Board size must be between %d and %d.\n",
+               MIN_BOARD_SIZE, MAX_BOARD_SIZE);
         continue;
       }
-
-      if (parsed_bs < 4 || parsed_bs > 10) {
-        printf("Error: Board size must be between 4 and 10.\n");
-        continue;
-      }
-
-      bs = (int)parsed_bs;
     } while (!bs);
   }
 
@@ -602,6 +596,31 @@ void help(void) {
          "c: length +5 (cheat)\n"
          "v: toggle debug view\n"
          "q: quit\n");
+}
+
+/*---------- Parse the Board Size ----------*/
+enum board_size_parse_status parse_board_size(const char *input,
+                                              int *board_size) {
+  char *endptr;
+  long parsed_bs;
+
+  errno = 0;
+  parsed_bs = strtol(input, &endptr, 10);
+
+  if (errno != 0 || endptr == input)
+    return BOARD_SIZE_INVALID;
+
+  while (*endptr != '\0' && isspace((unsigned char)*endptr))
+    endptr++;
+
+  if (*endptr != '\0')
+    return BOARD_SIZE_INVALID;
+
+  if (parsed_bs < MIN_BOARD_SIZE || parsed_bs > MAX_BOARD_SIZE)
+    return BOARD_SIZE_OUT_OF_RANGE;
+
+  *board_size = (int)parsed_bs;
+  return BOARD_SIZE_VALID;
 }
 
 /*---------- Check Whether an Obstacle Would Spawn Too Close ----------*/
