@@ -1,12 +1,13 @@
 /************************************************************
  * File:    cnake.c                                         *
- * Date:    2014-10-16 - 27.12.2014-12-27 (2026-07-20)      *
+ * Date:    2014-10-16 - 27.12.2014-12-27 (2026-07-21)      *
  * Author:  Aaron Dettmann                                  *
  * Purpose: Cnake - Primitive ASCII snake game written in C *
  ************************************************************/
 
 #include <ctype.h>
 #include <errno.h>
+#include <stdbool.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -43,6 +44,15 @@ enum command_result {
   COMMAND_MOVE
 };
 
+enum exit_code {
+  EXIT_OK = 0,
+  EXIT_INPUT_ERROR = 1,
+  EXIT_MEMORY_ERROR = 2,
+  EXIT_TILE_PLACEMENT_ERROR = 3,
+  EXIT_TERMINAL_ERROR = 4,
+  EXIT_COMMAND_ERROR = 5
+};
+
 enum tile_type {
   TILE_EMPTY = 0,
   TILE_HEAD = -1,
@@ -65,34 +75,42 @@ enum tile_type {
 */
 
 #define CLEAR "\033[H\033[0J"
-#define BOARD_TILE(board, board_size, x_pos, y_pos)                            \
-  ((board)[(y_pos) * (board_size) + (x_pos)])
+
+static inline int *board_tile_ptr(int *board, int board_size, int x_pos,
+                                  int y_pos) {
+  return &board[y_pos * board_size + x_pos];
+}
+
+static inline int board_tile(const int *board, int board_size, int x_pos,
+                             int y_pos) {
+  return board[y_pos * board_size + x_pos];
+}
 
 /*---------- Function Prototypes ----------*/
 void sig_handler(int signo);
-int init_terminal(void);
+bool init_terminal(void);
 void restore_terminal(void);
 int read_stdin_char(char *, int);
 void discard_escape_sequence(void);
 int read_command(char *);
-void hl(void);
+void print_header(void);
 void draw_border(int board_size);
-void draw_game_board(int *, int, char, char, char, char, char, char,
+void draw_game_board(const int *, int, char, char, char, char, char, char,
                      const int[3], int, int);
 void print_game_status_message(enum game_status, char, char, char, char);
 void help(void);
 enum board_size_parse_status parse_board_size(const char *, int *);
-void free_board(int *);
+bool apply_move_command(int, char, char *, int *, int *, const char **);
 enum command_result handle_player_command(int, char *, char *, int *, int *,
                                           int *, int *, int *);
-int has_adjacent_obstacle(int *, int, int, int);
-int is_spawn_position_valid(int *, int, int, int, enum tile_type);
-int find_spawn_position(int *, int, enum tile_type, int *, int *);
+bool has_adjacent_obstacle(const int *, int, int, int);
+bool is_spawn_position_valid(const int *, int, int, int, enum tile_type);
+bool find_spawn_position(const int *, int, enum tile_type, int *, int *);
 enum game_status handle_tile_effect(int, int *, int[3], int *, int *);
 void advance_snake(int *, int, int, int, int, int, int);
-int respawn_tile_if_needed(int *, int, int, enum tile_type);
-int place_tile(int *, int, enum tile_type);
-int board_contains_value(int *, int, int);
+bool respawn_tile_if_needed(int *, int, int, enum tile_type);
+bool place_tile(int *, int, enum tile_type);
+bool board_contains_value(const int *, int, int);
 
 /*---------- Terminal State ----------*/
 static struct termios original_terminal;
@@ -110,8 +128,8 @@ int main(int argc, char *argv[]) {
       discard,              // Discard long board-size input
       x, y, x_old, y_old,   // Position coordinates
       length = 1,           // Length of the snake
-      numofobs = 0,         // Number of obstacles
-      target_numofobs,      // Desired number of obstacles
+      obstacle_count = 0,   // Number of obstacles
+      target_obstacle_count, // Desired number of obstacles
       stats[3] = {0, 0, 0}, // Statistics [moves][snacks eaten][poison eaten]
       show = 0,             // Show/Hide debug output
       spawn_snack = 0,      // Respawn snack after tail update
@@ -136,7 +154,7 @@ int main(int argc, char *argv[]) {
   /*---------- Signal Handling ----------*/
   if (atexit(restore_terminal) != 0) {
     fprintf(stderr, "Error: Unable to register terminal cleanup.\n");
-    return 4;
+    return EXIT_TERMINAL_ERROR;
   }
 
   action.sa_handler = sig_handler;
@@ -145,11 +163,11 @@ int main(int argc, char *argv[]) {
 
   if (sigaction(SIGINT, &action, NULL) == -1) {
     fprintf(stderr, "Error: Unable to install signal handler.\n");
-    return 4;
+    return EXIT_TERMINAL_ERROR;
   }
 
   /*---------- Determine Board Size ----------*/
-  hl();
+  print_header();
 
   if (argc > 1 && parse_board_size(argv[1], &bs) != BOARD_SIZE_VALID)
     bs = 0;
@@ -159,7 +177,7 @@ int main(int argc, char *argv[]) {
       printf("Choose the board size [%d-%d] (default: %d): ", MIN_BOARD_SIZE,
              MAX_BOARD_SIZE, DEFAULT_BOARD_SIZE);
       if (!fgets(board_size_input, sizeof(board_size_input), stdin))
-        return 1;
+        return EXIT_INPUT_ERROR;
 
       newline = strchr(board_size_input, '\n');
       if (newline == NULL)
@@ -189,38 +207,38 @@ int main(int argc, char *argv[]) {
 
   board = (int *)calloc((size_t)bs * (size_t)bs, sizeof(*board));
   if (board == NULL)
-    return 2;
+    return EXIT_MEMORY_ERROR;
 
   /*---------- Seed rand() ----------*/
   srand(time(NULL));
 
   /*---------- Starting Position ----------*/
-  BOARD_TILE(board, bs, x, y) = TILE_HEAD;
+  *board_tile_ptr(board, bs, x, y) = TILE_HEAD;
 
   /*---------- Generate Random Positions ----------*/
-  target_numofobs = (int)(((bs * bs) / 10) + 1);
+  target_obstacle_count = (int)(((bs * bs) / 10) + 1);
 
-  for (i = 0; i < target_numofobs; i++)
+  for (i = 0; i < target_obstacle_count; i++)
     if (place_tile(board, bs, TILE_OBSTACLE))
-      numofobs++;
+      obstacle_count++;
     else
       break;
 
   if (!place_tile(board, bs, TILE_POISON) ||
       !place_tile(board, bs, TILE_SNACK)) {
     fprintf(stderr, "Error: Unable to place all tiles on the board.\n");
-    free_board(board);
-    return 3;
+    free(board);
+    return EXIT_TILE_PLACEMENT_ERROR;
   }
 
   if (!init_terminal()) {
     fprintf(stderr, "Error: Unable to enable direct input mode.\n");
-    free_board(board);
-    return 4;
+    free(board);
+    return EXIT_TERMINAL_ERROR;
   }
 
   /*---------- Start Main Game Loop ----------*/
-  hl();
+  print_header();
   printf("==> Board: %dx%d\n\n", bs, bs);
 
   while (1) {
@@ -241,8 +259,8 @@ int main(int argc, char *argv[]) {
     command_result = handle_player_command(bs, &cmd, &head, &x, &y, &length,
                                            &show, &stats[0]);
     if (command_result == COMMAND_ERROR) {
-      free_board(board);
-      return 5;
+      free(board);
+      return EXIT_COMMAND_ERROR;
     }
 
     if (interrupted || command_result == COMMAND_QUIT)
@@ -251,7 +269,7 @@ int main(int argc, char *argv[]) {
     if (command_result == COMMAND_SKIP_TURN)
       continue;
 
-    game_status = handle_tile_effect(BOARD_TILE(board, bs, x, y), &length,
+    game_status = handle_tile_effect(board_tile(board, bs, x, y), &length,
                                      stats, &spawn_snack, &spawn_poison);
     if (game_status != GAME_RUNNING)
       continue;
@@ -260,14 +278,14 @@ int main(int argc, char *argv[]) {
 
     if (!respawn_tile_if_needed(board, bs, spawn_snack, TILE_SNACK)) {
       fprintf(stderr, "Error: Unable to place a snack.\n");
-      free_board(board);
-      return 3;
+      free(board);
+      return EXIT_TILE_PLACEMENT_ERROR;
     }
 
     if (!respawn_tile_if_needed(board, bs, spawn_poison, TILE_POISON)) {
       fprintf(stderr, "Error: Unable to place poison.\n");
-      free_board(board);
-      return 3;
+      free(board);
+      return EXIT_TILE_PLACEMENT_ERROR;
     }
 
     if (!board_contains_value(board, bs, TILE_EMPTY)) {
@@ -280,7 +298,7 @@ int main(int argc, char *argv[]) {
   restore_terminal();
 
   if (interrupted) {
-    free_board(board);
+    free(board);
     printf(RES "\n\n");
     return 128 + interrupted;
   }
@@ -289,10 +307,10 @@ int main(int argc, char *argv[]) {
   printf("\nMoves:\t\t%4d\n", stats[0]);
   printf("Snacks:\t\t%4d\n", stats[1]);
   printf("Poison:\t%4d\n", stats[2]);
-  printf("Length:\t\t%d/%d+\n\n", length, (bs * bs - numofobs - 1));
+  printf("Length:\t\t%d/%d+\n\n", length, (bs * bs - obstacle_count - 1));
 
-  free_board(board);
-  return 0;
+  free(board);
+  return EXIT_OK;
 
 } /* End of main() */
 
@@ -301,17 +319,17 @@ int main(int argc, char *argv[]) {
 /*================================*/
 
 /*---------- Signal Handling ----------*/
-void sig_handler(int sigint) { interrupted = sigint; }
+void sig_handler(int signo) { interrupted = signo; }
 
 /*---------- Enable Direct Terminal Input ----------*/
-int init_terminal(void) {
+bool init_terminal(void) {
   struct termios terminal;
 
   if (!isatty(STDIN_FILENO))
-    return 1;
+    return false;
 
   if (tcgetattr(STDIN_FILENO, &original_terminal) == -1)
-    return 0;
+    return false;
 
   terminal = original_terminal;
   terminal.c_lflag &= ~(ICANON | ECHO);
@@ -319,10 +337,10 @@ int init_terminal(void) {
   terminal.c_cc[VTIME] = 0;
 
   if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &terminal) == -1)
-    return 0;
+    return false;
 
   terminal_initialized = 1;
-  return 1;
+  return true;
 }
 
 /*---------- Restore Terminal Settings ----------*/
@@ -330,7 +348,9 @@ void restore_terminal(void) {
   if (!terminal_initialized)
     return;
 
-  tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_terminal);
+  if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_terminal) == -1)
+    fprintf(stderr, "Warning: Unable to restore terminal settings.\n");
+
   terminal_initialized = 0;
 }
 
@@ -426,7 +446,9 @@ int read_command(char *cmd) {
 }
 
 /*---------- Header ----------*/
-void hl(void) { printf(CLEAR "=========== CNAKE %s ===========\n\n", VERSION); }
+void print_header(void) {
+  printf(CLEAR "=========== CNAKE %s ===========\n\n", VERSION);
+}
 
 /*---------- Draw Outer Board Border ----------*/
 void draw_border(int board_size) {
@@ -441,18 +463,18 @@ void draw_border(int board_size) {
 }
 
 /*---------- Draw the Game Board ----------*/
-void draw_game_board(int *boardl, int bsl, char terra, char body, char head,
-                     char obstacle, char snack, char poison, const int stats[3],
-                     int length, int show) {
+void draw_game_board(const int *board, int board_size, char terra, char body,
+                     char head, char obstacle, char snack, char poison,
+                     const int stats[3], int length, int show) {
   int i, j, tile_value;
 
-  draw_border(bsl);
+  draw_border(board_size);
 
-  for (i = 0; i < bsl; i++) {
+  for (i = 0; i < board_size; i++) {
     printf(GRN " | ");
 
-    for (j = 0; j < bsl; j++) {
-      tile_value = BOARD_TILE(boardl, bsl, j, i);
+    for (j = 0; j < board_size; j++) {
+      tile_value = board_tile(board, board_size, j, i);
 
       if (tile_value > TILE_EMPTY)
         printf(RED "%c ", body);
@@ -482,16 +504,16 @@ void draw_game_board(int *boardl, int bsl, char terra, char body, char head,
     printf(RES "\n");
   }
 
-  draw_border(bsl);
+  draw_border(board_size);
 
   if (show) {
     printf("\n");
 
-    for (i = 0; i < bsl; i++) {
+    for (i = 0; i < board_size; i++) {
       printf("|");
 
-      for (j = 0; j < bsl; j++)
-        printf("%2d ", BOARD_TILE(boardl, bsl, j, i));
+      for (j = 0; j < board_size; j++)
+        printf("%2d ", board_tile(board, board_size, j, i));
 
       printf("|\n");
     }
@@ -507,7 +529,7 @@ void print_game_status_message(enum game_status game_status, char body,
   }
 
   if (game_status == GAME_OVER_SNAKE)
-    printf("\nSnake!" RED " %c%c%c " RES, body, body, head);
+    printf("\nSnake!" RED " %c%c> " RES, body, body, head);
   else if (game_status == GAME_OVER_OBSTACLE)
     printf("\nObstacle!" BLU " %c " RES, obstacle);
   else if (game_status == GAME_OVER_POISON)
@@ -554,14 +576,49 @@ enum board_size_parse_status parse_board_size(const char *input,
   return BOARD_SIZE_VALID;
 }
 
-/*---------- Free the Game Board ----------*/
-void free_board(int *board) { free(board); }
+bool apply_move_command(int board_size, char cmd, char *head, int *x, int *y,
+                        const char **direction_label) {
+  int dx = 0;
+  int dy = 0;
+  char next_head = '\0';
+
+  switch (cmd) {
+  case 'k':
+    dy = -1;
+    next_head = '^';
+    *direction_label = "Up";
+    break;
+  case 'j':
+    dy = 1;
+    next_head = 'v';
+    *direction_label = "Down";
+    break;
+  case 'h':
+    dx = -1;
+    next_head = '<';
+    *direction_label = "Left";
+    break;
+  case 'l':
+    dx = 1;
+    next_head = '>';
+    *direction_label = "Right";
+    break;
+  default:
+    return false;
+  }
+
+  *head = next_head;
+  *x = (*x + dx + board_size) % board_size;
+  *y = (*y + dy + board_size) % board_size;
+  return true;
+}
 
 /*---------- Read and Apply One Player Command ----------*/
 enum command_result handle_player_command(int board_size, char *cmd, char *head,
                                           int *x, int *y, int *length,
                                           int *show, int *move_count) {
   int cmd_status;
+  const char *direction_label;
 
   do {
     printf("\nPress a key [?]: ");
@@ -582,42 +639,17 @@ enum command_result handle_player_command(int board_size, char *cmd, char *head,
     if (*cmd == '?') {
       help();
       continue;
-    } else if (*cmd == 'k') {
-      hl();
-      printf("==> Up!\n\n");
-      *head = '^';
-      *y -= 1;
-      if (*y < 0)
-        *y = board_size - 1;
-    } else if (*cmd == 'j') {
-      hl();
-      printf("==> Down!\n\n");
-      *head = 'v';
-      *y += 1;
-      if (*y > board_size - 1)
-        *y = 0;
-    } else if (*cmd == 'h') {
-      hl();
-      printf("==> Left!\n\n");
-      *head = '<';
-      *x -= 1;
-      if (*x < 0)
-        *x = board_size - 1;
-    } else if (*cmd == 'l') {
-      hl();
-      printf("==> Right!\n\n");
-      *head = '>';
-      *x += 1;
-      if (*x > board_size - 1)
-        *x = 0;
-    } else if (*cmd == 'c') /* CHEAT CODE --> FOR TESTING */
-    {
-      hl();
+    } else if (apply_move_command(board_size, *cmd, head, x, y,
+                                  &direction_label)) {
+      print_header();
+      printf("==> %s!\n\n", direction_label);
+    } else if (*cmd == 'c') { /* CHEAT CODE --> FOR TESTING */
+      print_header();
       printf("==> Length +5!\n\n");
       *length += 5;
       return COMMAND_SKIP_TURN;
     } else if (*cmd == 'v') {
-      hl();
+      print_header();
       printf("==> Toggle Debug View!\n\n");
       *show = !*show;
       return COMMAND_SKIP_TURN;
@@ -635,57 +667,60 @@ enum command_result handle_player_command(int board_size, char *cmd, char *head,
 }
 
 /*---------- Check Whether an Obstacle Would Spawn Too Close ----------*/
-int has_adjacent_obstacle(int *boardl, int bsl, int x_pos, int y_pos) {
+bool has_adjacent_obstacle(const int *board, int board_size, int x_pos,
+                           int y_pos) {
   int x_check, y_check;
 
   for (y_check = y_pos - 1; y_check <= y_pos + 1; y_check++)
     for (x_check = x_pos - 1; x_check <= x_pos + 1; x_check++) {
-      if (y_check < 0 || y_check >= bsl || x_check < 0 || x_check >= bsl)
+      if (y_check < 0 || y_check >= board_size || x_check < 0 ||
+          x_check >= board_size)
         continue;
 
       if (y_check == y_pos && x_check == x_pos)
         continue;
 
-      if (BOARD_TILE(boardl, bsl, x_check, y_check) == TILE_OBSTACLE)
-        return 1;
+      if (board_tile(board, board_size, x_check, y_check) == TILE_OBSTACLE)
+        return true;
     }
 
-  return 0;
+  return false;
 }
 
 /*---------- Check Whether a Spawn Position Is Valid ----------*/
-int is_spawn_position_valid(int *boardl, int bsl, int x_pos, int y_pos,
-                            enum tile_type type) {
-  if (BOARD_TILE(boardl, bsl, x_pos, y_pos) != TILE_EMPTY)
-    return 0;
+bool is_spawn_position_valid(const int *board, int board_size, int x_pos,
+                             int y_pos, enum tile_type type) {
+  if (board_tile(board, board_size, x_pos, y_pos) != TILE_EMPTY)
+    return false;
 
-  if (type == TILE_OBSTACLE && has_adjacent_obstacle(boardl, bsl, x_pos, y_pos))
-    return 0;
+  if (type == TILE_OBSTACLE &&
+      has_adjacent_obstacle(board, board_size, x_pos, y_pos))
+    return false;
 
-  return 1;
+  return true;
 }
 
 /*---------- Find a Valid Position for a Tile ----------*/
-int find_spawn_position(int *boardl, int bsl, enum tile_type type, int *x_out,
-                        int *y_out) {
+bool find_spawn_position(const int *board, int board_size, enum tile_type type,
+                         int *x_out, int *y_out) {
   int i, index, total, x_pos, y_pos, start;
 
-  total = bsl * bsl;
+  total = board_size * board_size;
   start = rand() % total;
 
   for (i = 0; i < total; i++) {
     index = (start + i) % total;
-    y_pos = index / bsl;
-    x_pos = index % bsl;
+    y_pos = index / board_size;
+    x_pos = index % board_size;
 
-    if (is_spawn_position_valid(boardl, bsl, x_pos, y_pos, type)) {
+    if (is_spawn_position_valid(board, board_size, x_pos, y_pos, type)) {
       *x_out = x_pos;
       *y_out = y_pos;
-      return 1;
+      return true;
     }
   }
 
-  return 0;
+  return false;
 }
 
 /*---------- Apply the Current Tile Effect ----------*/
@@ -723,49 +758,49 @@ enum game_status handle_tile_effect(int tile_value, int *length, int stats[3],
 }
 
 /*---------- Advance the Snake ----------*/
-void advance_snake(int *boardl, int bsl, int x_pos, int y_pos, int x_previous,
+void advance_snake(int *board, int board_size, int x_pos, int y_pos, int x_previous,
                    int y_previous, int length) {
   int i, j;
 
-  BOARD_TILE(boardl, bsl, x_pos, y_pos) = TILE_HEAD; /* Head position */
-  BOARD_TILE(boardl, bsl, x_previous, y_previous) =
+  *board_tile_ptr(board, board_size, x_pos, y_pos) = TILE_HEAD; /* Head position */
+  *board_tile_ptr(board, board_size, x_previous, y_previous) =
       length; /* Store the snake length at the previous head position */
 
-  for (i = 0; i < bsl; i++)
-    for (j = 0; j < bsl; j++)
-      if (BOARD_TILE(boardl, bsl, j, i) > TILE_EMPTY)
+  for (i = 0; i < board_size; i++)
+    for (j = 0; j < board_size; j++)
+      if (board_tile(board, board_size, j, i) > TILE_EMPTY)
         /* All values >0 are snake body segments */
-        BOARD_TILE(boardl, bsl, j, i) -= 1;
+        *board_tile_ptr(board, board_size, j, i) -= 1;
 }
 
 /*---------- Respawn a Consumed Tile ----------*/
-int respawn_tile_if_needed(int *boardl, int bsl, int should_respawn,
-                           enum tile_type type) {
-  return !should_respawn || place_tile(boardl, bsl, type) ||
-         !board_contains_value(boardl, bsl, TILE_EMPTY);
+bool respawn_tile_if_needed(int *board, int board_size, int should_respawn,
+                            enum tile_type type) {
+  return !should_respawn || place_tile(board, board_size, type) ||
+         !board_contains_value(board, board_size, TILE_EMPTY);
 }
 
 /*---------- Place a Tile on the Board ----------*/
-int place_tile(int *boardl, int bsl, enum tile_type type) {
+bool place_tile(int *board, int board_size, enum tile_type type) {
   int x_pos, y_pos;
 
-  if (!find_spawn_position(boardl, bsl, type, &x_pos, &y_pos))
-    return 0;
+  if (!find_spawn_position(board, board_size, type, &x_pos, &y_pos))
+    return false;
 
-  BOARD_TILE(boardl, bsl, x_pos, y_pos) = type;
-  return 1;
+  *board_tile_ptr(board, board_size, x_pos, y_pos) = type;
+  return true;
 }
 
 /*---------- Search for a Value in the Matrix ----------*/
-int board_contains_value(int *boardl, int bsl, int value) {
+bool board_contains_value(const int *board, int board_size, int value) {
   int i, j;
 
-  for (i = 0; i < bsl; i++)
-    for (j = 0; j < bsl; j++)
-      if (BOARD_TILE(boardl, bsl, j, i) == value)
-        return 1; /* Value found */
+  for (i = 0; i < board_size; i++)
+    for (j = 0; j < board_size; j++)
+      if (board_tile(board, board_size, j, i) == value)
+        return true; /* Value found */
 
-  return 0;
+  return false;
 }
 
 /*----- EOF -----*/
