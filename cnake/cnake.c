@@ -43,6 +43,14 @@ enum command_result {
   COMMAND_MOVE
 };
 
+enum tile_type {
+  TILE_EMPTY = 0,
+  TILE_HEAD = -1,
+  TILE_OBSTACLE = -2,
+  TILE_SNACK = -3,
+  TILE_POISON = -4
+};
+
 /*---------- Colors ----------*/
 #define RED "\x1B[31m" /* red */
 #define GRN "\x1B[32m" /* green */
@@ -78,12 +86,12 @@ void free_board(int *);
 enum command_result handle_player_command(int, char *, char *, int *, int *,
                                           int *, int *, int *);
 int has_adjacent_obstacle(int *, int, int, int);
-int is_spawn_position_valid(int *, int, int, int, int);
-int find_spawn_position(int *, int, int, int *, int *);
+int is_spawn_position_valid(int *, int, int, int, enum tile_type);
+int find_spawn_position(int *, int, enum tile_type, int *, int *);
 enum game_status handle_tile_effect(int, int *, int[3], int *, int *);
 void advance_snake(int *, int, int, int, int, int, int);
-int respawn_tile_if_needed(int *, int, int, int);
-int place_tile(int *, int, int);
+int respawn_tile_if_needed(int *, int, int, enum tile_type);
+int place_tile(int *, int, enum tile_type);
 int board_contains_value(int *, int, int);
 
 /*---------- Terminal State ----------*/
@@ -112,12 +120,12 @@ int main(int argc, char *argv[]) {
   char cmd = '\0',          // Command
       board_size_input[32], // Board-size prompt input
       *newline,             // Trailing newline position
-      terra = ' ',          // ( 0) Empty tile
-      body = '=',           // (>0) Body
-      head = '>',           // (-1) Head
-      obstacle = '#',       // (-2) Obstacle
-      snack = '*',          // (-3) Snack
-      poison = '!';         // (-4) Poison
+      terra = ' ',          // Empty tile
+      body = '=',           // Body segment
+      head = '>',           // Head tile
+      obstacle = '#',       // Obstacle tile
+      snack = '*',          // Snack tile
+      poison = '!';         // Poison tile
   struct sigaction action;
   enum board_size_parse_status board_size_status;
   enum command_result command_result;
@@ -187,18 +195,19 @@ int main(int argc, char *argv[]) {
   srand(time(NULL));
 
   /*---------- Starting Position ----------*/
-  BOARD_TILE(board, bs, x, y) = -1; /* head */
+  BOARD_TILE(board, bs, x, y) = TILE_HEAD;
 
   /*---------- Generate Random Positions ----------*/
   target_numofobs = (int)(((bs * bs) / 10) + 1);
 
   for (i = 0; i < target_numofobs; i++)
-    if (place_tile(board, bs, -2))
+    if (place_tile(board, bs, TILE_OBSTACLE))
       numofobs++;
     else
       break;
 
-  if (!place_tile(board, bs, -4) || !place_tile(board, bs, -3)) {
+  if (!place_tile(board, bs, TILE_POISON) ||
+      !place_tile(board, bs, TILE_SNACK)) {
     fprintf(stderr, "Error: Unable to place all tiles on the board.\n");
     free_board(board);
     return 3;
@@ -249,19 +258,19 @@ int main(int argc, char *argv[]) {
 
     advance_snake(board, bs, x, y, x_old, y_old, length);
 
-    if (!respawn_tile_if_needed(board, bs, spawn_snack, -3)) {
+    if (!respawn_tile_if_needed(board, bs, spawn_snack, TILE_SNACK)) {
       fprintf(stderr, "Error: Unable to place a snack.\n");
       free_board(board);
       return 3;
     }
 
-    if (!respawn_tile_if_needed(board, bs, spawn_poison, -4)) {
+    if (!respawn_tile_if_needed(board, bs, spawn_poison, TILE_POISON)) {
       fprintf(stderr, "Error: Unable to place poison.\n");
       free_board(board);
       return 3;
     }
 
-    if (!board_contains_value(board, bs, 0)) {
+    if (!board_contains_value(board, bs, TILE_EMPTY)) {
       game_status = GAME_WON;
       continue;
     }
@@ -445,17 +454,17 @@ void draw_game_board(int *boardl, int bsl, char terra, char body, char head,
     for (j = 0; j < bsl; j++) {
       tile_value = BOARD_TILE(boardl, bsl, j, i);
 
-      if (tile_value > 0)
+      if (tile_value > TILE_EMPTY)
         printf(RED "%c ", body);
-      else if (tile_value == 0)
+      else if (tile_value == TILE_EMPTY)
         printf(RES "%c ", terra);
-      else if (tile_value == -1)
+      else if (tile_value == TILE_HEAD)
         printf(RED "%c ", head);
-      else if (tile_value == -2)
+      else if (tile_value == TILE_OBSTACLE)
         printf(BLU "%c ", obstacle);
-      else if (tile_value == -3)
+      else if (tile_value == TILE_SNACK)
         printf(YEL "%c ", snack);
-      else if (tile_value == -4)
+      else if (tile_value == TILE_POISON)
         printf(GRN "%c ", poison);
     }
 
@@ -637,7 +646,7 @@ int has_adjacent_obstacle(int *boardl, int bsl, int x_pos, int y_pos) {
       if (y_check == y_pos && x_check == x_pos)
         continue;
 
-      if (BOARD_TILE(boardl, bsl, x_check, y_check) == -2)
+      if (BOARD_TILE(boardl, bsl, x_check, y_check) == TILE_OBSTACLE)
         return 1;
     }
 
@@ -646,18 +655,19 @@ int has_adjacent_obstacle(int *boardl, int bsl, int x_pos, int y_pos) {
 
 /*---------- Check Whether a Spawn Position Is Valid ----------*/
 int is_spawn_position_valid(int *boardl, int bsl, int x_pos, int y_pos,
-                            int type) {
-  if (BOARD_TILE(boardl, bsl, x_pos, y_pos) != 0)
+                            enum tile_type type) {
+  if (BOARD_TILE(boardl, bsl, x_pos, y_pos) != TILE_EMPTY)
     return 0;
 
-  if (type == -2 && has_adjacent_obstacle(boardl, bsl, x_pos, y_pos))
+  if (type == TILE_OBSTACLE &&
+      has_adjacent_obstacle(boardl, bsl, x_pos, y_pos))
     return 0;
 
   return 1;
 }
 
 /*---------- Find a Valid Position for a Tile ----------*/
-int find_spawn_position(int *boardl, int bsl, int type, int *x_out,
+int find_spawn_position(int *boardl, int bsl, enum tile_type type, int *x_out,
                         int *y_out) {
   int i, index, total, x_pos, y_pos, start;
 
@@ -685,20 +695,20 @@ enum game_status handle_tile_effect(int tile_value, int *length, int stats[3],
   *spawn_snack = 0;
   *spawn_poison = 0;
 
-  if (tile_value > 0)
+  if (tile_value > TILE_EMPTY)
     return GAME_OVER_SNAKE;
 
-  if (tile_value == -2)
+  if (tile_value == TILE_OBSTACLE)
     return GAME_OVER_OBSTACLE;
 
-  if (tile_value == -3) {
+  if (tile_value == TILE_SNACK) {
     *length += 1;
     stats[1] += 1; /* +1 snack */
     *spawn_snack = 1;
     return GAME_RUNNING;
   }
 
-  if (tile_value == -4) {
+  if (tile_value == TILE_POISON) {
     stats[2] += 1; /* +1 poison */
 
     if (*length > 1) {
@@ -718,25 +728,26 @@ void advance_snake(int *boardl, int bsl, int x_pos, int y_pos,
                    int x_previous, int y_previous, int length) {
   int i, j;
 
-  BOARD_TILE(boardl, bsl, x_pos, y_pos) = -1; /* Head position */
+  BOARD_TILE(boardl, bsl, x_pos, y_pos) = TILE_HEAD; /* Head position */
   BOARD_TILE(boardl, bsl, x_previous, y_previous) =
       length; /* Store the snake length at the previous head position */
 
   for (i = 0; i < bsl; i++)
     for (j = 0; j < bsl; j++)
-      if (BOARD_TILE(boardl, bsl, j, i) > 0) /* All values >0 are snake body segments */
+      if (BOARD_TILE(boardl, bsl, j, i) > TILE_EMPTY)
+        /* All values >0 are snake body segments */
         BOARD_TILE(boardl, bsl, j, i) -= 1;
 }
 
 /*---------- Respawn a Consumed Tile ----------*/
 int respawn_tile_if_needed(int *boardl, int bsl, int should_respawn,
-                           int type) {
+                           enum tile_type type) {
   return !should_respawn || place_tile(boardl, bsl, type) ||
-         !board_contains_value(boardl, bsl, 0);
+         !board_contains_value(boardl, bsl, TILE_EMPTY);
 }
 
 /*---------- Place a Tile on the Board ----------*/
-int place_tile(int *boardl, int bsl, int type) {
+int place_tile(int *boardl, int bsl, enum tile_type type) {
   int x_pos, y_pos;
 
   if (!find_spawn_position(boardl, bsl, type, &x_pos, &y_pos))
