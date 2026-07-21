@@ -36,6 +36,13 @@ enum game_status {
   GAME_OVER_POISON
 };
 
+enum command_result {
+  COMMAND_ERROR = -1,
+  COMMAND_QUIT = 0,
+  COMMAND_SKIP_TURN,
+  COMMAND_MOVE
+};
+
 /*---------- Colors ----------*/
 #define RED "\x1B[31m" /* red */
 #define GRN "\x1B[32m" /* green */
@@ -60,12 +67,20 @@ void discard_escape_sequence(void);
 int read_command(char *);
 void hl(void);
 void draw_border(int board_size);
+void draw_game_board(int **, int, char, char, char, char, char, char,
+                     const int[3], int, int);
+void print_game_status_message(enum game_status, char, char, char);
 void help(void);
 enum board_size_parse_status parse_board_size(const char *, int *);
 void free_board(int **, int);
+enum command_result handle_player_command(int, char *, char *, int *, int *,
+                                          int *, int *, int *);
 int has_adjacent_obstacle(int **, int, int, int);
 int is_spawn_position_valid(int **, int, int, int, int);
 int find_spawn_position(int **, int, int, int *, int *);
+enum game_status handle_tile_effect(int, int *, int[3], int *, int *);
+void advance_snake(int **, int, int, int, int, int, int);
+int respawn_tile_if_needed(int **, int, int, int);
 int place_tile(int **, int, int);
 int board_contains_value(int **, int, int);
 
@@ -84,7 +99,6 @@ int main(int argc, char *argv[]) {
       bs = 0,             // Board size --> side length of the playing field
       discard,            // Discard long board-size input
       x, y, x_old, y_old, // Position coordinates
-      cmd_status,      // Command read status
       length = 1,      // Length of the snake
       numofobs = 0,    // Number of obstacles
       target_numofobs, // Desired number of obstacles
@@ -93,7 +107,7 @@ int main(int argc, char *argv[]) {
       spawn_snack = 0,      // Respawn snack after tail update
       spawn_poison = 0,     // Respawn poison after tail update
       **board = NULL;       // Game board
-  char cmd = 'x',           // Command
+  char cmd = '\0',          // Command
       board_size_input[32], // Board-size prompt input
       *newline,             // Trailing newline position
       terra = ' ',          // ( 0) Empty tile
@@ -104,6 +118,7 @@ int main(int argc, char *argv[]) {
       poison = '!';         // (-4) Poison
   struct sigaction action;
   enum board_size_parse_status board_size_status;
+  enum command_result command_result;
   enum game_status game_status = GAME_RUNNING;
 
   x = y = x_old = y_old = 0;
@@ -207,235 +222,54 @@ int main(int argc, char *argv[]) {
   hl();
   printf("==> Board: %dx%d\n\n", bs, bs);
 
-  while (cmd != 'q') {
+  while (1) {
     if (interrupted)
       break;
 
-    /*---------- Draw the Game Board ----------*/
-    draw_border(bs);
+    draw_game_board(board, bs, terra, body, head, obstacle, snack, poison,
+                    stats, length, show);
 
-    for (i = 0; i < bs; i++) {
-      printf(GRN " | ");
-
-      for (j = 0; j < bs; j++) {
-        if (board[i][j] > 0)
-          printf(RED "%c ", body);
-        else if (board[i][j] == 0)
-          printf(RES "%c ", terra);
-        else if (board[i][j] == -1)
-          printf(RED "%c ", head);
-        else if (board[i][j] == -2)
-          printf(BLU "%c ", obstacle);
-        else if (board[i][j] == -3)
-          printf(YEL "%c ", snack);
-        else if (board[i][j] == -4)
-          printf(GRN "%c ", poison);
-      }
-
-      printf(GRN "|\t");
-
-      if (i == 0)
-        printf(RED "%c%c>\t" RES "Snake     (%d)", body, body, length);
-      else if (i == 1)
-        printf(YEL "%c  \t" RES "Snack     (%d)", snack, stats[1]);
-      else if (i == 2)
-        printf(GRN "%c  \t" RES "Poison    (%d)", poison, stats[2]);
-      else if (i == 3)
-        printf(BLU "%c  \t" RES "Obstacle", obstacle);
-
-      printf(RES "\n");
-    }
-
-    draw_border(bs);
-
-    /*---------- Display board[][] values - FOR DEBUGGING ONLY! ----------*/
-    if (show) {
-      printf("\n");
-
-      for (i = 0; i < bs; i++) {
-        printf("|");
-
-        for (j = 0; j < bs; j++)
-          printf("%2d ", board[i][j]);
-
-        printf("|\n");
-      }
-    }
-
-    /*---------- Check Win/Loss Condition ----------*/
     if (game_status != GAME_RUNNING) {
-
-      if (game_status == GAME_WON) {
-        printf("\nYOU WIN!\n");
-        break;
-      }
-
-      if (game_status == GAME_OVER_SNAKE)
-        printf("\nSnake!" RED " %c%c%c " RES, body, body, head);
-      else if (game_status == GAME_OVER_OBSTACLE)
-        printf("\nObstacle!" BLU " %c " RES, obstacle);
-      else if (game_status == GAME_OVER_POISON)
-        printf("\nPoison!" GRN " %c " RES, poison);
-
-      printf("~ GAME OVER!\n");
+      print_game_status_message(game_status, body, obstacle, poison);
       break;
     }
 
-    /*---------- Save Previous Position ----------*/
     x_old = x;
     y_old = y;
 
-    /*---------- Read Player Command ----------*/
-    do {
-      printf("\nPress a key [?]: ");
-      fflush(stdout);
-
-      cmd_status = read_command(&cmd);
-      if (cmd_status == -1) {
-        fprintf(stderr, "\nError: Unable to read a command.\n");
-        free_board(board, bs);
-        return 5;
-      }
-
-      if (cmd_status == 2)
-        continue;
-
-      if (cmd_status == 0) {
-        if (interrupted)
-          break;
-
-        cmd = 'q';
-        break;
-      }
-
-      if (cmd == '?') {
-        help();
-        continue;
-      } else if (cmd == 'k') {
-        hl();
-        printf("==> Up!\n\n");
-        head = '^';
-        y -= 1;
-        if (y < 0)
-          y = bs - 1;
-      } else if (cmd == 'j') {
-        hl();
-        printf("==> Down!\n\n");
-        head = 'v';
-        y += 1;
-        if (y > bs - 1)
-          y = 0;
-      } else if (cmd == 'h') {
-        hl();
-        printf("==> Left!\n\n");
-        head = '<';
-        x -= 1;
-        if (x < 0)
-          x = bs - 1;
-
-      } else if (cmd == 'l') {
-        hl();
-        printf("==> Right!\n\n");
-        head = '>';
-        x += 1;
-        if (x > bs - 1)
-          x = 0;
-      } else if (cmd == 'c') /* CHEAT CODE --> FOR TESTING */
-      {
-        hl();
-        printf("==> Length +5!\n\n");
-        length += 5;
-        break;
-      } else if (cmd == 'v') {
-        hl();
-        printf("==> Toggle Debug View!\n\n");
-        if (!show)
-          show = 1;
-        else
-          show = 0;
-        break;
-      } else if (cmd == 'q')
-        break;
-
-      else {
-        printf("\nError: Unknown command!\n");
-        continue;
-      }
-
-      stats[0] += 1;
-      break;
-
-    } while (1);
-
-    if (interrupted)
-      break;
-
-    if (cmd == 'q')
-      break;
-
-    if (cmd == 'v' || cmd == 'c')
-      continue;
-
-    /*---------- Events ----------*/
-    spawn_snack = 0;
-    spawn_poison = 0;
-
-    if (board[y][x] > 0) /* Collision with snake body */
-    {
-      game_status = GAME_OVER_SNAKE;
-      continue;
-    } else if (board[y][x] == -2) /* Collision with obstacle */
-    {
-      game_status = GAME_OVER_OBSTACLE;
-      continue;
-    } else if (board[y][x] == -3) /* Snack found */
-    {
-      length++;
-      stats[1] += 1; /* +1 snack */
-
-      spawn_snack = 1;
-
-    } else if (board[y][x] == -4) /* Poison found */
-    {
-      stats[2] += 1; /* +1 poison */
-
-      if (length > 1) {
-        length -= 1;
-        spawn_poison = 1;
-      } else {
-        game_status = GAME_OVER_POISON;
-        continue;
-      }
+    command_result = handle_player_command(bs, &cmd, &head, &x, &y, &length,
+                                           &show, &stats[0]);
+    if (command_result == COMMAND_ERROR) {
+      free_board(board, bs);
+      return 5;
     }
 
-    /*---------- Update Head Position ----------*/
-    board[y][x] = -1; /* Head position */
-    board[y_old][x_old] =
-        length; /* Store the snake length at the previous head position */
+    if (interrupted || command_result == COMMAND_QUIT)
+      break;
 
-    /*---------- Update Snake Tail ----------*/
-    for (i = 0; i < bs; i++)
-      for (j = 0; j < bs; j++)
-        if (board[i][j] > 0) /* All values >0 are snake body segments */
-          board[i][j] -= 1;
+    if (command_result == COMMAND_SKIP_TURN)
+      continue;
 
-    if (spawn_snack && !place_tile(board, bs, -3) &&
-        board_contains_value(board, bs, 0) != 0) {
+    game_status = handle_tile_effect(board[y][x], &length, stats, &spawn_snack,
+                                     &spawn_poison);
+    if (game_status != GAME_RUNNING)
+      continue;
+
+    advance_snake(board, bs, x, y, x_old, y_old, length);
+
+    if (!respawn_tile_if_needed(board, bs, spawn_snack, -3)) {
       fprintf(stderr, "Error: Unable to place a snack.\n");
       free_board(board, bs);
       return 3;
     }
 
-    if (spawn_poison && !place_tile(board, bs, -4) &&
-        board_contains_value(board, bs, 0) != 0) {
+    if (!respawn_tile_if_needed(board, bs, spawn_poison, -4)) {
       fprintf(stderr, "Error: Unable to place poison.\n");
       free_board(board, bs);
       return 3;
     }
 
-    /*---------- Check for Free Tiles ----------*/
-    if (board_contains_value(board, bs, 0) == 0) /* Game won */
-    {
+    if (!board_contains_value(board, bs, 0)) {
       game_status = GAME_WON;
       continue;
     }
@@ -605,6 +439,80 @@ void draw_border(int board_size) {
   printf("|\n" RES);
 }
 
+/*---------- Draw the Game Board ----------*/
+void draw_game_board(int *boardl[], int bsl, char terra, char body, char head,
+                     char obstacle, char snack, char poison, const int stats[3],
+                     int length, int show) {
+  int i, j;
+
+  draw_border(bsl);
+
+  for (i = 0; i < bsl; i++) {
+    printf(GRN " | ");
+
+    for (j = 0; j < bsl; j++) {
+      if (boardl[i][j] > 0)
+        printf(RED "%c ", body);
+      else if (boardl[i][j] == 0)
+        printf(RES "%c ", terra);
+      else if (boardl[i][j] == -1)
+        printf(RED "%c ", head);
+      else if (boardl[i][j] == -2)
+        printf(BLU "%c ", obstacle);
+      else if (boardl[i][j] == -3)
+        printf(YEL "%c ", snack);
+      else if (boardl[i][j] == -4)
+        printf(GRN "%c ", poison);
+    }
+
+    printf(GRN "|\t");
+
+    if (i == 0)
+      printf(RED "%c%c>\t" RES "Snake     (%d)", body, body, length);
+    else if (i == 1)
+      printf(YEL "%c  \t" RES "Snack     (%d)", snack, stats[1]);
+    else if (i == 2)
+      printf(GRN "%c  \t" RES "Poison    (%d)", poison, stats[2]);
+    else if (i == 3)
+      printf(BLU "%c  \t" RES "Obstacle", obstacle);
+
+    printf(RES "\n");
+  }
+
+  draw_border(bsl);
+
+  if (show) {
+    printf("\n");
+
+    for (i = 0; i < bsl; i++) {
+      printf("|");
+
+      for (j = 0; j < bsl; j++)
+        printf("%2d ", boardl[i][j]);
+
+      printf("|\n");
+    }
+  }
+}
+
+/*---------- Print the Game Status Message ----------*/
+void print_game_status_message(enum game_status game_status, char body,
+                               char obstacle, char poison) {
+  if (game_status == GAME_WON) {
+    printf("\nYOU WIN!\n");
+    return;
+  }
+
+  if (game_status == GAME_OVER_SNAKE)
+    printf("\nSnake!" RED " %c%c> " RES, body, body);
+  else if (game_status == GAME_OVER_OBSTACLE)
+    printf("\nObstacle!" BLU " %c " RES, obstacle);
+  else if (game_status == GAME_OVER_POISON)
+    printf("\nPoison!" GRN " %c " RES, poison);
+
+  printf("~ GAME OVER!\n");
+}
+
 /*---------- Help ----------*/
 void help(void) {
   printf("\nKeys (vim-style):\n"
@@ -654,6 +562,83 @@ void free_board(int **board, int rows) {
     free(board[i]);
 
   free(board);
+}
+
+/*---------- Read and Apply One Player Command ----------*/
+enum command_result handle_player_command(int board_size, char *cmd, char *head,
+                                          int *x, int *y, int *length,
+                                          int *show, int *move_count) {
+  int cmd_status;
+
+  do {
+    printf("\nPress a key [?]: ");
+    fflush(stdout);
+
+    cmd_status = read_command(cmd);
+    if (cmd_status == -1) {
+      fprintf(stderr, "\nError: Unable to read a command.\n");
+      return COMMAND_ERROR;
+    }
+
+    if (cmd_status == 2)
+      continue;
+
+    if (cmd_status == 0)
+      return COMMAND_QUIT;
+
+    if (*cmd == '?') {
+      help();
+      continue;
+    } else if (*cmd == 'k') {
+      hl();
+      printf("==> Up!\n\n");
+      *head = '^';
+      *y -= 1;
+      if (*y < 0)
+        *y = board_size - 1;
+    } else if (*cmd == 'j') {
+      hl();
+      printf("==> Down!\n\n");
+      *head = 'v';
+      *y += 1;
+      if (*y > board_size - 1)
+        *y = 0;
+    } else if (*cmd == 'h') {
+      hl();
+      printf("==> Left!\n\n");
+      *head = '<';
+      *x -= 1;
+      if (*x < 0)
+        *x = board_size - 1;
+    } else if (*cmd == 'l') {
+      hl();
+      printf("==> Right!\n\n");
+      *head = '>';
+      *x += 1;
+      if (*x > board_size - 1)
+        *x = 0;
+    } else if (*cmd == 'c') /* CHEAT CODE --> FOR TESTING */
+    {
+      hl();
+      printf("==> Length +5!\n\n");
+      *length += 5;
+      return COMMAND_SKIP_TURN;
+    } else if (*cmd == 'v') {
+      hl();
+      printf("==> Toggle Debug View!\n\n");
+      *show = !*show;
+      return COMMAND_SKIP_TURN;
+    } else if (*cmd == 'q')
+      return COMMAND_QUIT;
+    else {
+      printf("\nError: Unknown command!\n");
+      continue;
+    }
+
+    *move_count += 1;
+    return COMMAND_MOVE;
+
+  } while (1);
 }
 
 /*---------- Check Whether an Obstacle Would Spawn Too Close ----------*/
@@ -708,6 +693,62 @@ int find_spawn_position(int *boardl[], int bsl, int type, int *x_out,
   }
 
   return 0;
+}
+
+/*---------- Apply the Current Tile Effect ----------*/
+enum game_status handle_tile_effect(int tile_value, int *length, int stats[3],
+                                    int *spawn_snack, int *spawn_poison) {
+  *spawn_snack = 0;
+  *spawn_poison = 0;
+
+  if (tile_value > 0)
+    return GAME_OVER_SNAKE;
+
+  if (tile_value == -2)
+    return GAME_OVER_OBSTACLE;
+
+  if (tile_value == -3) {
+    *length += 1;
+    stats[1] += 1; /* +1 snack */
+    *spawn_snack = 1;
+    return GAME_RUNNING;
+  }
+
+  if (tile_value == -4) {
+    stats[2] += 1; /* +1 poison */
+
+    if (*length > 1) {
+      *length -= 1;
+      *spawn_poison = 1;
+      return GAME_RUNNING;
+    }
+
+    return GAME_OVER_POISON;
+  }
+
+  return GAME_RUNNING;
+}
+
+/*---------- Advance the Snake ----------*/
+void advance_snake(int *boardl[], int bsl, int x_pos, int y_pos,
+                   int x_previous, int y_previous, int length) {
+  int i, j;
+
+  boardl[y_pos][x_pos] = -1; /* Head position */
+  boardl[y_previous][x_previous] =
+      length; /* Store the snake length at the previous head position */
+
+  for (i = 0; i < bsl; i++)
+    for (j = 0; j < bsl; j++)
+      if (boardl[i][j] > 0) /* All values >0 are snake body segments */
+        boardl[i][j] -= 1;
+}
+
+/*---------- Respawn a Consumed Tile ----------*/
+int respawn_tile_if_needed(int *boardl[], int bsl, int should_respawn,
+                           int type) {
+  return !should_respawn || place_tile(boardl, bsl, type) ||
+         !board_contains_value(boardl, bsl, 0);
 }
 
 /*---------- Place a Tile on the Board ----------*/
