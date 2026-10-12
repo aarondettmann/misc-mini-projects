@@ -18,6 +18,10 @@ python -m pip install -r requirements.txt
 
 ## Projects
 
+The following projects have been relocated:
+
+* **Cnake** (A simple text-based snake game written in C): [aarondettmann/cnake](https://github.com/aarondettmann/cnake)
+
 ### Barnsley Fern
 
 * **Files:** [barnsely_fern](barnsley_fern).
@@ -45,12 +49,6 @@ python -m pip install -r requirements.txt
 * **Files:** [ionizing_radiation_art](ionizing_radiation_art).
 
 ![Ionizing raditaion art](ionizing_radiation_art/cover_blue_animation.svg)
-
-### Cnake (a simple terminal-based snake game)
-
-* **Files:** [cnake](cnake).
-
-![Cnake screenshot](cnake/cnake_screenshot.png)
 
 ### Runge-Kutta 4 Solver
 
